@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>德州扑克多人版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        h1 {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            background: linear-gradient(45deg, #ffd700, #ff6b6b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+        }
+        
+        /* 大厅样式 */
+        .lobby {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .lobby h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #ffd700;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #aaa;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 1.1em;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 5px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.5);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: #fff;
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: #fff;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+            color: #fff;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-row {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        /* 房间信息 */
+        .room-info {
+            text-align: center;
+            padding: 20px;
+            background: rgba(255, 215, 0, 0.1);
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .room-code {
+            font-size: 2em;
+            font-weight: bold;
+            color: #ffd700;
+            letter-spacing: 5px;
+        }
+        
+        /* 玩家列表 */
+        .players-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .player-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .player-card.ready {
+            border: 2px solid #38ef7d;
+        }
+        
+        .player-card.is-host {
+            border: 2px solid #ffd700;
+        }
+        
+        .player-card .name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .player-card .chips {
+            color: #ffd700;
+        }
+        
+        .player-card .status {
+            font-size: 0.8em;
+            color: #aaa;
+            margin-top: 5px;
+        }
+        
+        /* 游戏桌面 */
+        .game-table {
+            display: none;
+        }
+        
+        .game-table.active {
+            display: block;
+        }
+        
+        .table {
+            background: radial-gradient(ellipse at center, #1a5c2e 0%, #0d3d1a 100%);
+            border-radius: 50%;
+            padding: 40px;
+            margin: 20px auto;
+            max-width: 800px;
+            min-height: 400px;
+            position: relative;
+            border: 10px solid #8b4513;
+            box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+        }
+        
+        .players-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .game-player {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .game-player.current {
+            border: 3px solid #ffd700;
+            animation: pulse 1s infinite;
+        }
+        
+        .game-player.folded {
+            opacity: 0.4;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }
+            50% { box-shadow: 0 0 25px rgba(255, 215, 0, 0.8); }
+        }
+        
+        .cards {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+            margin: 10px 0;
+        }
+        
+        .card {
+            width: 50px;
+            height: 70px;
+            background: #fff;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            font-weight: bold;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .card.red {
+            color: #e74c3c;
+        }
+        
+        .card.black {
+            color: #2c3e50;
+        }
+        
+        .card.hidden {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+        
+        .community-cards {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .community-cards .cards {
+            margin: 10px 0;
+        }
+        
+        .pot {
+            text-align: center;
+            font-size: 1.5em;
+            color: #ffd700;
+            margin: 15px 0;
+        }
+        
+        /* 控制按钮 */
+        .controls {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .controls-row {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .call-btn {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+        }
+        
+        .raise-btn {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+        }
+        
+        .fold-btn {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        }
+        
+        .check-btn {
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+        }
+        
+        /* 消息 */
+        .message {
+            text-align: center;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+        
+        /* 隐藏 */
+        .hidden {
+            display: none !important;
+        }
+        
+        /* 响应式 */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8em;
+            }
+            
+            .table {
+                padding: 20px;
+                min-height: 300px;
+            }
+            
+            .players-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .btn {
+                padding: 12px 20px;
+                font-size: 0.9em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🃏 德州扑克多人版</h1>
+        
+        <!-- 大厅界面 -->
+        <div id="lobby" class="lobby">
+            <h2>游戏大厅</h2>
+            
+            <div class="form-group">
+                <label>你的昵称</label>
+                <input type="text" id="playerName" placeholder="输入你的昵称" maxlength="10">
+            </div>
+            
+            <div id="mainMenu" class="btn-row">
+                <button class="btn btn-primary" onclick="createRoom()">🏠 创建房间</button>
+                <button class="btn btn-success" onclick="showJoinDialog()">🚪 加入房间</button>
+            </div>
+            
+            <div id="joinDialog" class="hidden">
+                <div class="form-group">
+                    <label>房间码</label>
+                    <input type="text" id="roomCodeInput" placeholder="输入4位房间码" maxlength="4" style="text-transform: uppercase;">
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-success" onclick="joinRoom()">加入</button>
+                    <button class="btn btn-danger" onclick="hideJoinDialog()">取消</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 房间界面 -->
+        <div id="room" class="lobby hidden">
+            <div class="room-info">
+                <div>房间码</div>
+                <div class="room-code" id="displayRoomCode">----</div>
+            </div>
+            
+            <h2 style="text-align: center; margin-bottom: 15px;">玩家列表</h2>
+            <div class="players-list" id="playersList"></div>
+            
+            <div class="btn-row">
+                <button class="btn btn-success" id="readyBtn" onclick="toggleReady()">准备</button>
+                <button class="btn btn-primary" id="startBtn" onclick="startGame()" style="display: none;">开始游戏</button>
+                <button class="btn btn-danger" onclick="leaveRoom()">离开房间</button>
+            </div>
+        </div>
+        
+        <!-- 游戏界面 -->
+        <div id="game" class="game-table hidden">
+            <div class="message" id="gameMessage">等待游戏开始...</div>
+            
+            <div class="players-grid" id="gamePlayers"></div>
+            
+            <div class="community-cards">
+                <div style="color: #ffd700; margin-bottom: 10px;">公共牌</div>
+                <div class="cards" id="communityCards"></div>
+                <div class="pot" id="potDisplay">底池: 0</div>
+            </div>
+            
+            <div class="controls" id="gameControls">
+                <div class="controls-row">
+                    <button class="btn" disabled>等待中...</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let currentRoomCode = null;
+        let myPlayerId = null;
+        let isHost = false;
+        let gameState = null;
+        
+        // 创建房间
+        function createRoom() {
+            const name = document.getElementById('playerName').value.trim() || '玩家';
+            socket.emit('createRoom', { name });
+        }
+        
+        // 显示加入对话框
+        function showJoinDialog() {
+            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('joinDialog').classList.remove('hidden');
+        }
+        
+        // 隐藏加入对话框
+        function hideJoinDialog() {
+            document.getElementById('mainMenu').classList.remove('hidden');
+            document.getElementById('joinDialog').classList.add('hidden');
+        }
+        
+        // 加入房间
+        function joinRoom() {
+            const name = document.getElementById('playerName').value.trim() || '玩家';
+            const roomCode = document.getElementById('roomCodeInput').value.trim().toUpperCase();
+            
+            if (roomCode.length !== 4) {
+                alert('请输入4位房间码');
+                return;
+            }
+            
+            socket.emit('joinRoom', { name, roomCode });
+        }
+        
+        // 离开房间
+        function leaveRoom() {
+            socket.disconnect();
+            location.reload();
+        }
+        
+        // 准备/取消准备
+        function toggleReady() {
+            socket.emit('ready', { roomCode: currentRoomCode });
+        }
+        
+        // 开始游戏
+        function startGame() {
+            socket.emit('startGame', { roomCode: currentRoomCode });
+        }
+        
+        // Socket 事件
+        socket.on('roomCreated', (data) => {
+            currentRoomCode = data.roomCode;
+            myPlayerId = data.playerId;
+            isHost = true;
+            showRoom();
+        });
+        
+        socket.on('roomJoined', (data) => {
+            currentRoomCode = data.roomCode;
+            myPlayerId = data.playerId;
+            showRoom();
+        });
+        
+        socket.on('roomUpdate', (data) => {
+            updateRoomUI(data);
+        });
+        
+        socket.on('gameState', (data) => {
+            gameState = data;
+            updateGameUI();
+        });
+        
+        socket.on('error', (data) => {
+            alert(data.message);
+        });
+        
+        // 显示房间界面
+        function showRoom() {
+            document.getElementById('lobby').classList.add('hidden');
+            document.getElementById('room').classList.remove('hidden');
+            document.getElementById('displayRoomCode').textContent = currentRoomCode;
+        }
+        
+        // 更新房间UI
+        function updateRoomUI(data) {
+            const playersList = document.getElementById('playersList');
+            playersList.innerHTML = data.players.map(p => `
+                <div class="player-card ${p.ready ? 'ready' : ''} ${p.isHost ? 'is-host' : ''}">
+                    <div class="name">${p.name}${p.isHost ? ' 👑' : ''}</div>
+                    <div class="chips">💰 ${p.chips}</div>
+                    <div class="status">${p.ready ? '✅ 已准备' : '⏳ 未准备'}</div>
+                </div>
+            `).join('');
+            
+            const me = data.players.find(p => p.id === myPlayerId);
+            if (me) {
+                isHost = me.isHost;
+                document.getElementById('readyBtn').textContent = me.ready ? '取消准备' : '准备';
+                document.getElementById('startBtn').style.display = isHost ? 'inline-block' : 'none';
+            }
+        }
+        
+        // 更新游戏UI
+        function updateGameUI() {
+            document.getElementById('room').classList.add('hidden');
+            document.getElementById('game').classList.remove('hidden');
+            document.getElementById('game').classList.add('active');
+            
+            if (!gameState) return;
+            
+            // 更新玩家
+            const playersGrid = document.getElementById('gamePlayers');
+            playersGrid.innerHTML = gameState.players.map((p, i) => `
+                <div class="game-player ${i === gameState.currentPlayerIndex ? 'current' : ''} ${p.folded ? 'folded' : ''}">
+                    <div class="name">${p.name}${p.id === myPlayerId ? ' (你)' : ''}</div>
+                    <div class="chips">💰 ${p.chips}</div>
+                    <div class="cards">
+                        ${p.hand.map(c => c.hidden ? 
+                            '<div class="card hidden">?</div>' : 
+                            `<div class="card ${c.suit === '♥' || c.suit === '♦' ? 'red' : 'black'}">${c.suit}${c.rank}</div>`
+                        ).join('')}
+                    </div>
+                    <div style="font-size: 0.8em; color: #aaa;">
+                        ${p.folded ? '已弃牌' : p.isAllIn ? 'All In' : `下注: ${p.bet}`}
+                    </div>
+                </div>
+            `).join('');
+            
+            // 更新公共牌
+            const communityCards = document.getElementById('communityCards');
+            communityCards.innerHTML = gameState.communityCards.map(c => 
+                `<div class="card ${c.suit === '♥' || c.suit === '♦' ? 'red' : 'black'}">${c.suit}${c.rank}</div>`
+            ).join('');
+            
+            // 更新底池
+            document.getElementById('potDisplay').textContent = `底池: ${gameState.pot}`;
+            
+            // 更新消息
+            const phaseNames = {
+                'waiting': '等待中',
+                'preflop': '翻牌前',
+                'flop': '翻牌',
+                'turn': '转牌',
+                'river': '河牌',
+                'showdown': '摊牌'
+            };
+            
+            const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+            let message = `${phaseNames[gameState.phase] || gameState.phase}`;
+            
+            if (gameState.gameActive && currentPlayer) {
+                if (currentPlayer.id === myPlayerId) {
+                    message = '轮到你行动！';
+                } else {
+                    message = `等待 ${currentPlayer.name} 行动...`;
+                }
+            }
+            
+            if (gameState.phase === 'showdown') {
+                message = '摊牌！';
+            }
+            
+            document.getElementById('gameMessage').textContent = message;
+            
+            // 更新控制按钮
+            updateControls();
+        }
+        
+        // 更新控制按钮
+        function updateControls() {
+            const controls = document.getElementById('gameControls');
+            
+            if (!gameState || !gameState.gameActive) {
+                controls.innerHTML = `
+                    <div class="controls-row">
+                        <button class="btn" disabled>游戏结束</button>
+                    </div>
+                `;
+                return;
+            }
+            
+            const myIndex = gameState.players.findIndex(p => p.id === myPlayerId);
+            if (myIndex === -1 || gameState.currentPlayerIndex !== myIndex) {
+                controls.innerHTML = `
+                    <div class="controls-row">
+                        <button class="btn" disabled>等待其他玩家...</button>
+                    </div>
+                `;
+                return;
+            }
+            
+            const me = gameState.players[myIndex];
+            const toCall = gameState.currentBet - me.bet;
+            
+            let html = '<div class="controls-row">';
+            
+            if (toCall > 0) {
+                if (toCall >= me.chips) {
+                    html += `<button class="btn call-btn" onclick="playerAction('call')">All in (${me.chips})</button>`;
+                } else {
+                    html += `<button class="btn call-btn" onclick="playerAction('call')">跟注 ${toCall}</button>`;
+                }
+            } else {
+                html += `<button class="btn check-btn" onclick="playerAction('check')">过牌</button>`;
+            }
+            
+            const minRaise = gameState.currentBet + gameState.bigBlind;
+            if (me.chips > toCall) {
+                html += `<button class="btn raise-btn" onclick="showRaise()">加注</button>`;
+            }
+            
+            html += `<button class="btn fold-btn" onclick="playerAction('fold')">弃牌</button>`;
+            html += '</div>';
+            
+            controls.innerHTML = html;
+        }
+        
+        // 显示加注选项
+        function showRaise() {
+            const me = gameState.players.find(p => p.id === myPlayerId);
+            const minRaise = gameState.currentBet + gameState.bigBlind;
+            const maxRaise = me.chips + me.bet;
+            
+            const amount = prompt(`加注金额 (${minRaise} - ${maxRaise}):`, minRaise);
+            if (amount) {
+                playerAction('raise', parseInt(amount));
+            }
+        }
+        
+        // 玩家行动
+        function playerAction(action, amount = 0) {
+            socket.emit('playerAction', {
+                roomCode: currentRoomCode,
+                action,
+                amount
+            });
+        }
+    </script>
+</body>
+</html>
