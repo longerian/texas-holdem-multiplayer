@@ -6,19 +6,13 @@ const path = require('path');
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+  cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-// 静态文件
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 房间管理
 const rooms = new Map();
 
-// 生成房间码
 function generateRoomCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';
@@ -26,25 +20,6 @@ function generateRoomCode() {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;
-}
-
-// 游戏状态
-function createGameState() {
-  return {
-    deck: [],
-    communityCards: [],
-    pot: 0,
-    currentBet: 0,
-    phase: 'waiting', // waiting, preflop, flop, turn, river, showdown
-    currentPlayerIndex: 0,
-    gameActive: false,
-    smallBlind: 5,
-    bigBlind: 10,
-    dealerIndex: 0,
-    players: [],
-    actedThisRound: [],
-    lastRaisePlayerIndex: -1
-  };
 }
 
 // 创建牌组
@@ -60,7 +35,6 @@ function createDeck() {
   return deck;
 }
 
-// 洗牌
 function shuffle(deck) {
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -69,19 +43,39 @@ function shuffle(deck) {
   return deck;
 }
 
+// AI名称
+const aiNames = ['小明', '小红', '老王', '阿强', '小美'];
+
+// 创建房间
+function createRoom() {
+  return {
+    code: generateRoomCode(),
+    seats: [null, null, null, null, null, null], // 6个座位
+    hostId: null,
+    gameState: {
+      deck: [],
+      communityCards: [],
+      pot: 0,
+      currentBet: 0,
+      phase: 'waiting',
+      currentPlayerIndex: 0,
+      gameActive: false,
+      smallBlind: 5,
+      bigBlind: 10,
+      dealerIndex: 0,
+      players: [],
+      actedThisRound: [],
+      lastRaisePlayerIndex: -1
+    }
+  };
+}
+
 // 获取房间信息
 function getRoomInfo(room) {
   return {
     code: room.code,
-    players: room.players.map(p => ({
-      id: p.id,
-      name: p.name,
-      chips: p.chips,
-      ready: p.ready,
-      isHost: p.isHost
-    })),
-    maxPlayers: room.maxPlayers,
-    gameActive: room.gameState.gameActive
+    seats: room.seats,
+    hostId: room.hostId
   };
 }
 
@@ -89,9 +83,7 @@ function getRoomInfo(room) {
 function broadcastRoomState(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return;
-  
-  const roomInfo = getRoomInfo(room);
-  io.to(roomCode).emit('roomUpdate', roomInfo);
+  io.to(roomCode).emit('roomUpdate', getRoomInfo(room));
 }
 
 // 广播游戏状态
@@ -101,13 +93,14 @@ function broadcastGameState(roomCode) {
   
   const gs = room.gameState;
   
-  // 为每个玩家发送只属于自己的手牌
-  room.players.forEach(player => {
+  room.seats.forEach((seat, index) => {
+    if (!seat) return;
+    
     const playerGameState = {
       ...gs,
-      players: gs.players.map(p => {
-        // 只显示自己的手牌，其他玩家的牌隐藏（除了摊牌阶段）
-        if (p.id === player.id || gs.phase === 'showdown') {
+      players: gs.players.map((p, i) => {
+        if (!p) return null;
+        if (p.id === seat.id || gs.phase === 'showdown') {
           return p;
         }
         return {
@@ -116,7 +109,8 @@ function broadcastGameState(roomCode) {
         };
       })
     };
-    io.to(player.id).emit('gameState', playerGameState);
+    
+    io.to(seat.id).emit('gameState', playerGameState);
   });
 }
 
@@ -124,17 +118,25 @@ function broadcastGameState(roomCode) {
 function startGame(room) {
   const gs = room.gameState;
   
-  // 初始化玩家状态
-  gs.players = room.players.map((p, index) => ({
-    id: p.id,
-    name: p.name,
-    chips: p.chips,
-    hand: [],
-    bet: 0,
-    folded: false,
-    isAllIn: false,
-    index
-  }));
+  // 获取所有有人的座位
+  const activePlayers = room.seats.filter(s => s !== null);
+  if (activePlayers.length < 2) return;
+  
+  // 初始化玩家
+  gs.players = room.seats.map((seat, index) => {
+    if (!seat) return null;
+    return {
+      id: seat.id,
+      name: seat.name,
+      chips: seat.chips,
+      hand: [],
+      bet: 0,
+      folded: false,
+      isAllIn: false,
+      isAI: seat.isAI || false,
+      index
+    };
+  });
   
   // 发牌
   gs.deck = shuffle(createDeck());
@@ -144,293 +146,255 @@ function startGame(room) {
   gs.phase = 'preflop';
   gs.gameActive = true;
   gs.actedThisRound = [];
-  gs.dealerIndex = (gs.dealerIndex + 1) % gs.players.length;
+  gs.dealerIndex = (gs.dealerIndex + 1) % 6;
+  
+  // 跳过空位找到庄家
+  while (!gs.players[gs.dealerIndex]) {
+    gs.dealerIndex = (gs.dealerIndex + 1) % 6;
+  }
   
   // 发手牌
   gs.players.forEach(player => {
-    if (!player.folded) {
+    if (player && !player.folded) {
       player.hand = [gs.deck.pop(), gs.deck.pop()];
     }
   });
   
-  // 设置盲注
-  const smallBlindIndex = (gs.dealerIndex + 1) % gs.players.length;
-  const bigBlindIndex = (gs.dealerIndex + 2) % gs.players.length;
+  // 设置盲注 - 找到庄家后的两个有效玩家
+  let sbIndex = (gs.dealerIndex + 1) % 6;
+  while (!gs.players[sbIndex]) sbIndex = (sbIndex + 1) % 6;
   
-  const smallBlindPlayer = gs.players[smallBlindIndex];
-  const bigBlindPlayer = gs.players[bigBlindIndex];
+  let bbIndex = (sbIndex + 1) % 6;
+  while (!gs.players[bbIndex]) bbIndex = (bbIndex + 1) % 6;
   
-  const actualSmallBlind = Math.min(gs.smallBlind, smallBlindPlayer.chips);
-  const actualBigBlind = Math.min(gs.bigBlind, bigBlindPlayer.chips);
+  // 小盲
+  const sbPlayer = gs.players[sbIndex];
+  const actualSmallBlind = Math.min(gs.smallBlind, sbPlayer.chips);
+  sbPlayer.chips -= actualSmallBlind;
+  sbPlayer.bet = actualSmallBlind;
+  if (sbPlayer.chips === 0) sbPlayer.isAllIn = true;
   
-  smallBlindPlayer.chips -= actualSmallBlind;
-  smallBlindPlayer.bet = actualSmallBlind;
-  if (smallBlindPlayer.chips === 0) smallBlindPlayer.isAllIn = true;
-  
-  bigBlindPlayer.chips -= actualBigBlind;
-  bigBlindPlayer.bet = actualBigBlind;
-  if (bigBlindPlayer.chips === 0) bigBlindPlayer.isAllIn = true;
+  // 大盲
+  const bbPlayer = gs.players[bbIndex];
+  const actualBigBlind = Math.min(gs.bigBlind, bbPlayer.chips);
+  bbPlayer.chips -= actualBigBlind;
+  bbPlayer.bet = actualBigBlind;
+  if (bbPlayer.chips === 0) bbPlayer.isAllIn = true;
   
   gs.pot = actualSmallBlind + actualBigBlind;
   gs.currentBet = actualBigBlind;
   
   // 从大盲后开始
-  gs.currentPlayerIndex = (bigBlindIndex + 1) % gs.players.length;
+  gs.currentPlayerIndex = (bbIndex + 1) % 6;
+  while (!gs.players[gs.currentPlayerIndex] || gs.players[gs.currentPlayerIndex].isAllIn) {
+    gs.currentPlayerIndex = (gs.currentPlayerIndex + 1) % 6;
+  }
   
   broadcastGameState(room.code);
+  
+  // 如果当前是AI，延迟后自动行动
+  checkAITurn(room);
 }
 
-// Socket.IO 连接处理
-io.on('connection', (socket) => {
-  console.log(`玩家连接: ${socket.id}`);
+// 检查是否轮到AI
+function checkAITurn(room) {
+  const gs = room.gameState;
+  if (!gs.gameActive) return;
   
-  // 创建房间
-  socket.on('createRoom', (data) => {
-    const roomCode = generateRoomCode();
-    const room = {
-      code: roomCode,
-      players: [],
-      maxPlayers: 6,
-      gameState: createGameState()
-    };
-    
-    rooms.set(roomCode, room);
-    
-    socket.join(roomCode);
-    
-    const player = {
-      id: socket.id,
-      name: data.name || '玩家1',
-      chips: 1000,
-      ready: false,
-      isHost: true
-    };
-    
-    room.players.push(player);
-    
-    socket.emit('roomCreated', { roomCode, playerId: socket.id });
-    broadcastRoomState(roomCode);
-    
-    console.log(`房间创建: ${roomCode}`);
-  });
+  const currentPlayer = gs.players[gs.currentPlayerIndex];
+  if (!currentPlayer || !currentPlayer.isAI) return;
   
-  // 加入房间
-  socket.on('joinRoom', (data) => {
-    const room = rooms.get(data.roomCode);
-    
-    if (!room) {
-      socket.emit('error', { message: '房间不存在' });
-      return;
-    }
-    
-    if (room.players.length >= room.maxPlayers) {
-      socket.emit('error', { message: '房间已满' });
-      return;
-    }
-    
-    if (room.gameState.gameActive) {
-      socket.emit('error', { message: '游戏进行中，无法加入' });
-      return;
-    }
-    
-    socket.join(data.roomCode);
-    
-    const player = {
-      id: socket.id,
-      name: data.name || `玩家${room.players.length + 1}`,
-      chips: 1000,
-      ready: false,
-      isHost: false
-    };
-    
-    room.players.push(player);
-    
-    socket.emit('roomJoined', { roomCode: data.roomCode, playerId: socket.id });
-    broadcastRoomState(data.roomCode);
-    
-    console.log(`玩家加入房间: ${data.roomCode}`);
-  });
-  
-  // 准备
-  socket.on('ready', (data) => {
-    const room = rooms.get(data.roomCode);
-    if (!room) return;
-    
-    const player = room.players.find(p => p.id === socket.id);
-    if (player) {
-      player.ready = !player.ready;
-      broadcastRoomState(data.roomCode);
-    }
-  });
-  
-  // 开始游戏（仅房主）
-  socket.on('startGame', (data) => {
-    const room = rooms.get(data.roomCode);
-    if (!room) return;
-    
-    const player = room.players.find(p => p.id === socket.id);
-    if (!player || !player.isHost) return;
-    
-    if (room.players.length < 2) {
-      socket.emit('error', { message: '至少需要2名玩家' });
-      return;
-    }
-    
-    startGame(room);
-    console.log(`游戏开始: ${data.roomCode}`);
-  });
-  
-  // 玩家行动
-  socket.on('playerAction', (data) => {
-    const room = rooms.get(data.roomCode);
-    if (!room) return;
-    
-    const gs = room.gameState;
-    if (!gs.gameActive) return;
-    
-    const playerIndex = gs.players.findIndex(p => p.id === socket.id);
-    if (playerIndex === -1) return;
-    if (gs.currentPlayerIndex !== playerIndex) return;
-    
-    const player = gs.players[playerIndex];
-    const action = data.action;
-    const amount = data.amount || 0;
-    
-    // 处理行动
-    switch (action) {
-      case 'fold':
-        player.folded = true;
-        break;
-        
-      case 'check':
-        // 无需支付
-        break;
-        
-      case 'call':
-        const toCall = gs.currentBet - player.bet;
-        if (toCall >= player.chips) {
-          // All in
-          gs.pot += player.chips;
-          player.bet += player.chips;
-          player.chips = 0;
-          player.isAllIn = true;
-        } else {
-          player.chips -= toCall;
-          player.bet = gs.currentBet;
-          gs.pot += toCall;
-        }
-        break;
-        
-      case 'raise':
-        const raiseAmount = Math.min(amount, player.chips + player.bet);
-        const toCallNew = raiseAmount - player.bet;
-        
-        if (toCallNew >= player.chips) {
-          // All in
-          gs.pot += player.chips;
-          player.bet += player.chips;
-          player.chips = 0;
-          player.isAllIn = true;
-        } else {
-          player.chips -= toCallNew;
-          player.bet = raiseAmount;
-          gs.currentBet = raiseAmount;
-          gs.pot += toCallNew;
-          gs.actedThisRound = [playerIndex];
-        }
-        break;
-    }
-    
-    // 记录已行动
-    if (!gs.actedThisRound.includes(playerIndex)) {
-      gs.actedThisRound.push(playerIndex);
-    }
-    
-    // 下一个玩家或下一阶段
-    nextPlayer(room);
-    
-    broadcastGameState(room.code);
-  });
-  
-  // 离开房间
-  socket.on('disconnect', () => {
-    console.log(`玩家断开: ${socket.id}`);
-    
-    // 从所有房间中移除
-    rooms.forEach((room, roomCode) => {
-      const playerIndex = room.players.findIndex(p => p.id === socket.id);
-      if (playerIndex !== -1) {
-        room.players.splice(playerIndex, 1);
-        
-        if (room.players.length === 0) {
-          rooms.delete(roomCode);
-          console.log(`房间删除: ${roomCode}`);
-        } else {
-          // 转移房主
-          if (!room.players.some(p => p.isHost)) {
-            room.players[0].isHost = true;
-          }
-          broadcastRoomState(roomCode);
-        }
-      }
-    });
-  });
-});
+  // AI延迟500ms后行动
+  setTimeout(() => aiTurn(room), 500);
+}
 
-// 下一个玩家或进入下一阶段
+// AI决策
+function aiTurn(room) {
+  const gs = room.gameState;
+  if (!gs.gameActive) return;
+  
+  const player = gs.players[gs.currentPlayerIndex];
+  if (!player || !player.isAI || player.folded || player.isAllIn) {
+    nextPlayer(room);
+    return;
+  }
+  
+  const toCall = gs.currentBet - player.bet;
+  const handStrength = evaluateHandStrength(player.hand, gs.communityCards);
+  
+  let decision = 'fold';
+  const rand = Math.random();
+  
+  // 简单AI逻辑
+  if (toCall === 0) {
+    // 没人下注
+    if (handStrength > 0.5 || rand < 0.4) {
+      decision = rand < 0.3 ? 'raise' : 'check';
+    } else {
+      decision = 'check';
+    }
+  } else {
+    // 有人下注
+    const potOdds = toCall / (gs.pot + toCall);
+    
+    if (handStrength > 0.6) {
+      decision = rand < 0.5 ? 'raise' : 'call';
+    } else if (handStrength > 0.35 || potOdds < 0.3) {
+      decision = rand < 0.7 ? 'call' : 'fold';
+    } else if (rand < 0.2) {
+      decision = 'call'; // 偶尔诈唬
+    } else {
+      decision = 'fold';
+    }
+  }
+  
+  // 执行决策
+  executeAction(room, player, decision);
+}
+
+// 执行玩家行动
+function executeAction(room, player, action, amount = 0) {
+  const gs = room.gameState;
+  const playerIndex = player.index;
+  
+  switch (action) {
+    case 'fold':
+      player.folded = true;
+      break;
+      
+    case 'check':
+      break;
+      
+    case 'call':
+      const toCall = gs.currentBet - player.bet;
+      if (toCall >= player.chips) {
+        gs.pot += player.chips;
+        player.bet += player.chips;
+        player.chips = 0;
+        player.isAllIn = true;
+      } else {
+        player.chips -= toCall;
+        player.bet = gs.currentBet;
+        gs.pot += toCall;
+      }
+      break;
+      
+    case 'raise':
+      const raiseAmount = Math.min(amount, player.chips + player.bet);
+      const toCallNew = raiseAmount - player.bet;
+      
+      if (toCallNew >= player.chips) {
+        gs.pot += player.chips;
+        player.bet += player.chips;
+        player.chips = 0;
+        player.isAllIn = true;
+      } else {
+        player.chips -= toCallNew;
+        player.bet = raiseAmount;
+        gs.currentBet = raiseAmount;
+        gs.pot += toCallNew;
+        gs.actedThisRound = [playerIndex];
+      }
+      break;
+  }
+  
+  if (!gs.actedThisRound.includes(playerIndex)) {
+    gs.actedThisRound.push(playerIndex);
+  }
+  
+  broadcastGameState(room.code);
+  nextPlayer(room);
+}
+
+// 简单牌力评估
+function evaluateHandStrength(hand, community) {
+  if (hand.length < 2) return 0.3;
+  
+  const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+  const rank1 = ranks.indexOf(hand[0].rank);
+  const rank2 = ranks.indexOf(hand[1].rank);
+  const isPair = hand[0].rank === hand[1].rank;
+  const isSuited = hand[0].suit === hand[1].suit;
+  const highCard = Math.max(rank1, rank2);
+  
+  let strength = 0.2;
+  
+  // 对子
+  if (isPair) {
+    strength = 0.5 + (rank1 / ranks.length) * 0.4;
+  } else {
+    // 高牌
+    strength = (highCard / ranks.length) * 0.3;
+    
+    // 同花
+    if (isSuited) strength += 0.1;
+    
+    // 连牌
+    if (Math.abs(rank1 - rank2) <= 2) strength += 0.1;
+    
+    // AK, AQ 等
+    if (highCard >= 11 && Math.abs(rank1 - rank2) <= 2) strength += 0.15;
+  }
+  
+  // 公共牌加成（简化版）
+  if (community.length >= 3) {
+    strength += 0.1;
+  }
+  
+  return Math.min(strength, 1);
+}
+
+// 下一个玩家
 function nextPlayer(room) {
   const gs = room.gameState;
   
   // 检查是否只剩一个玩家
-  const activePlayers = gs.players.filter(p => !p.folded);
+  const activePlayers = gs.players.filter(p => p && !p.folded);
   if (activePlayers.length === 1) {
     endRound(room, activePlayers[0]);
     return;
   }
   
   // 找下一个需要行动的玩家
-  let nextIndex = (gs.currentPlayerIndex + 1) % gs.players.length;
+  let nextIndex = (gs.currentPlayerIndex + 1) % 6;
   let attempts = 0;
   
-  while (attempts < gs.players.length) {
+  while (attempts < 6) {
     const nextPlayer = gs.players[nextIndex];
     
-    if (!nextPlayer.folded && !nextPlayer.isAllIn && nextPlayer.chips > 0) {
-      // 检查是否需要行动
+    if (nextPlayer && !nextPlayer.folded && !nextPlayer.isAllIn && nextPlayer.chips > 0) {
       const needsToAct = !gs.actedThisRound.includes(nextIndex) || 
                          (gs.currentBet > nextPlayer.bet);
       
       if (needsToAct) {
         gs.currentPlayerIndex = nextIndex;
+        broadcastGameState(room.code);
+        checkAITurn(room);
         return;
       }
     }
     
-    nextIndex = (nextIndex + 1) % gs.players.length;
+    nextIndex = (nextIndex + 1) % 6;
     attempts++;
   }
   
-  // 所有人都行动过了，进入下一阶段
+  // 进入下一阶段
   nextPhase(room);
 }
 
-// 进入下一阶段
+// 下一阶段
 function nextPhase(room) {
   const gs = room.gameState;
   
-  // 重置本轮状态
-  gs.players.forEach(p => p.bet = 0);
+  // 重置
+  gs.players.forEach(p => { if (p) p.bet = 0; });
   gs.currentBet = 0;
   gs.actedThisRound = [];
   
   switch (gs.phase) {
     case 'preflop':
       gs.phase = 'flop';
-      gs.communityCards = [
-        gs.deck.pop(),
-        gs.deck.pop(),
-        gs.deck.pop()
-      ];
+      gs.communityCards = [gs.deck.pop(), gs.deck.pop(), gs.deck.pop()];
       break;
     case 'flop':
       gs.phase = 'turn';
@@ -446,15 +410,18 @@ function nextPhase(room) {
   }
   
   // 从庄家后第一个活跃玩家开始
-  let startIndex = (gs.dealerIndex + 1) % gs.players.length;
-  for (let i = 0; i < gs.players.length; i++) {
+  let startIndex = (gs.dealerIndex + 1) % 6;
+  for (let i = 0; i < 6; i++) {
     const player = gs.players[startIndex];
-    if (!player.folded && !player.isAllIn && player.chips > 0) {
+    if (player && !player.folded && !player.isAllIn && player.chips > 0) {
       gs.currentPlayerIndex = startIndex;
       break;
     }
-    startIndex = (startIndex + 1) % gs.players.length;
+    startIndex = (startIndex + 1) % 6;
   }
+  
+  broadcastGameState(room.code);
+  checkAITurn(room);
 }
 
 // 摊牌
@@ -462,17 +429,27 @@ function showdown(room) {
   const gs = room.gameState;
   gs.phase = 'showdown';
   
-  const activePlayers = gs.players.filter(p => !p.folded);
+  const activePlayers = gs.players.filter(p => p && !p.folded);
   
-  // 简单版：随机选择赢家（后续可以加入牌力比较）
+  // 简化版：随机赢家（后续可加入牌力比较）
   const winner = activePlayers[Math.floor(Math.random() * activePlayers.length)];
   winner.chips += gs.pot;
+  
+  broadcastGameState(room.code);
   
   // 3秒后可以开始新一局
   setTimeout(() => {
     gs.gameActive = false;
     gs.phase = 'waiting';
-    broadcastGameState(room.code);
+    
+    // 更新房间中玩家的筹码
+    gs.players.forEach((p, i) => {
+      if (p && room.seats[i]) {
+        room.seats[i].chips = p.chips;
+      }
+    });
+    
+    broadcastRoomState(room.code);
   }, 3000);
 }
 
@@ -482,15 +459,202 @@ function endRound(room, winner) {
   gs.phase = 'showdown';
   winner.chips += gs.pot;
   
+  broadcastGameState(room.code);
+  
   setTimeout(() => {
     gs.gameActive = false;
     gs.phase = 'waiting';
-    broadcastGameState(room.code);
-  }, 3000);
+    
+    gs.players.forEach((p, i) => {
+      if (p && room.seats[i]) {
+        room.seats[i].chips = p.chips;
+      }
+    });
+    
+    broadcastRoomState(room.code);
+  }, 2000);
 }
 
-// 启动服务器
+// Socket.IO
+io.on('connection', (socket) => {
+  console.log(`玩家连接: ${socket.id}`);
+  
+  // 创建房间
+  socket.on('createRoom', (data) => {
+    const room = createRoom();
+    rooms.set(room.code, room);
+    
+    socket.join(room.code);
+    
+    // 自动坐第一个位置
+    room.seats[0] = {
+      id: socket.id,
+      name: data.name || '玩家1',
+      chips: 1000,
+      ready: false,
+      isHost: true
+    };
+    room.hostId = socket.id;
+    
+    socket.emit('roomCreated', { roomCode: room.code, playerId: socket.id });
+    broadcastRoomState(room.code);
+  });
+  
+  // 加入房间
+  socket.on('joinRoom', (data) => {
+    const room = rooms.get(data.roomCode);
+    
+    if (!room) {
+      socket.emit('error', { message: '房间不存在' });
+      return;
+    }
+    
+    if (room.gameState.gameActive) {
+      socket.emit('error', { message: '游戏进行中' });
+      return;
+    }
+    
+    socket.join(data.roomCode);
+    
+    // 找空位坐下
+    const emptyIndex = room.seats.findIndex(s => s === null);
+    if (emptyIndex === -1) {
+      socket.emit('error', { message: '房间已满' });
+      return;
+    }
+    
+    room.seats[emptyIndex] = {
+      id: socket.id,
+      name: data.name || `玩家${emptyIndex + 1}`,
+      chips: 1000,
+      ready: false
+    };
+    
+    socket.emit('roomJoined', { roomCode: data.roomCode, playerId: socket.id });
+    broadcastRoomState(data.roomCode);
+  });
+  
+  // 选择座位
+  socket.on('selectSeat', (data) => {
+    const room = rooms.get(data.roomCode);
+    if (!room || room.gameState.gameActive) return;
+    
+    // 检查是否已在其他座位
+    const existingIndex = room.seats.findIndex(s => s && s.id === socket.id);
+    if (existingIndex !== -1) {
+      room.seats[existingIndex] = null;
+    }
+    
+    // 坐到新位置
+    if (room.seats[data.seatIndex] === null) {
+      const name = room.seats[existingIndex]?.name || '玩家';
+      room.seats[data.seatIndex] = {
+        id: socket.id,
+        name,
+        chips: 1000,
+        ready: false,
+        isHost: room.hostId === socket.id
+      };
+    }
+    
+    broadcastRoomState(data.roomCode);
+  });
+  
+  // 添加AI
+  socket.on('addAI', (data) => {
+    const room = rooms.get(data.roomCode);
+    if (!room || room.gameState.gameActive) return;
+    if (room.hostId !== socket.id) return;
+    
+    if (room.seats[data.seatIndex] === null) {
+      const aiIndex = room.seats.filter(s => s && s.isAI).length;
+      room.seats[data.seatIndex] = {
+        id: `ai_${Date.now()}_${data.seatIndex}`,
+        name: aiNames[aiIndex % aiNames.length] || `AI${data.seatIndex + 1}`,
+        chips: 1000,
+        ready: true, // AI默认准备
+        isAI: true
+      };
+    }
+    
+    broadcastRoomState(data.roomCode);
+  });
+  
+  // 移除AI
+  socket.on('removeAI', (data) => {
+    const room = rooms.get(data.roomCode);
+    if (!room || room.gameState.gameActive) return;
+    if (room.hostId !== socket.id) return;
+    
+    const seat = room.seats[data.seatIndex];
+    if (seat && seat.isAI) {
+      room.seats[data.seatIndex] = null;
+    }
+    
+    broadcastRoomState(data.roomCode);
+  });
+  
+  // 准备
+  socket.on('ready', (data) => {
+    const room = rooms.get(data.roomCode);
+    if (!room) return;
+    
+    const seat = room.seats.find(s => s && s.id === socket.id);
+    if (seat) {
+      seat.ready = !seat.ready;
+      broadcastRoomState(data.roomCode);
+    }
+  });
+  
+  // 开始游戏
+  socket.on('startGame', (data) => {
+    const room = rooms.get(data.roomCode);
+    if (!room || room.hostId !== socket.id) return;
+    
+    const occupiedSeats = room.seats.filter(s => s !== null);
+    const allReady = occupiedSeats.every(s => s.ready);
+    
+    if (occupiedSeats.length < 2 || !allReady) return;
+    
+    startGame(room);
+  });
+  
+  // 玩家行动
+  socket.on('playerAction', (data) => {
+    const room = rooms.get(data.roomCode);
+    if (!room) return;
+    
+    const gs = room.gameState;
+    if (!gs.gameActive) return;
+    
+    const player = gs.players[gs.currentPlayerIndex];
+    if (!player || player.id !== socket.id) return;
+    
+    executeAction(room, player, data.action, data.amount || 0);
+  });
+  
+  // 断开连接
+  socket.on('disconnect', () => {
+    rooms.forEach((room, roomCode) => {
+      const seatIndex = room.seats.findIndex(s => s && s.id === socket.id);
+      if (seatIndex !== -1) {
+        room.seats[seatIndex] = null;
+        
+        // 转移房主
+        if (room.hostId === socket.id) {
+          const newHost = room.seats.find(s => s && !s.isAI);
+          room.hostId = newHost ? newHost.id : null;
+        }
+        
+        if (!room.gameState.gameActive) {
+          broadcastRoomState(roomCode);
+        }
+      }
+    });
+  });
+});
+
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {
-  console.log(`德州扑克多人版服务器运行在 http://localhost:${PORT}`);
+  console.log(`德州扑克多人版运行在 http://localhost:${PORT}`);
 });

@@ -26,46 +26,45 @@
         
         h1 {
             text-align: center;
-            font-size: 2.5em;
-            margin-bottom: 20px;
+            font-size: 2em;
+            margin-bottom: 15px;
             background: linear-gradient(45deg, #ffd700, #ff6b6b);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            text-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
         }
         
-        /* 大厅样式 */
         .lobby {
             background: rgba(255, 255, 255, 0.1);
             border-radius: 20px;
-            padding: 40px;
+            padding: 30px;
             backdrop-filter: blur(10px);
         }
         
         .lobby h2 {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             color: #ffd700;
         }
         
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
         
         .form-group label {
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: 5px;
             color: #aaa;
+            font-size: 0.9em;
         }
         
         .form-group input {
             width: 100%;
-            padding: 15px;
+            padding: 12px;
             border: none;
             border-radius: 10px;
             background: rgba(255, 255, 255, 0.1);
             color: #fff;
-            font-size: 1.1em;
+            font-size: 1em;
         }
         
         .form-group input:focus {
@@ -74,109 +73,113 @@
         }
         
         .btn {
-            padding: 15px 30px;
+            padding: 12px 25px;
             border: none;
             border-radius: 10px;
-            font-size: 1.1em;
+            font-size: 1em;
             cursor: pointer;
             transition: all 0.3s;
             margin: 5px;
         }
         
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #fff;
-        }
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; }
+        .btn-success { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: #fff; }
+        .btn-warning { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: #fff; }
+        .btn-danger { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); color: #fff; }
+        .btn-secondary { background: rgba(255,255,255,0.2); color: #fff; }
         
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.5);
-        }
-        
-        .btn-success {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-            color: #fff;
-        }
-        
-        .btn-warning {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: #fff;
-        }
-        
-        .btn-danger {
-            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
-            color: #fff;
-        }
-        
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
+        .btn:hover { transform: translateY(-2px); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-small { padding: 8px 15px; font-size: 0.85em; }
         
         .btn-row {
             display: flex;
             justify-content: center;
             gap: 10px;
-            margin-top: 20px;
+            margin-top: 15px;
+            flex-wrap: wrap;
         }
         
-        /* 房间信息 */
         .room-info {
             text-align: center;
-            padding: 20px;
+            padding: 15px;
             background: rgba(255, 215, 0, 0.1);
             border-radius: 15px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
         
         .room-code {
-            font-size: 2em;
+            font-size: 1.8em;
             font-weight: bold;
             color: #ffd700;
             letter-spacing: 5px;
         }
         
-        /* 玩家列表 */
-        .players-list {
+        /* 6人座位 */
+        .seats-container {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            grid-template-columns: repeat(3, 1fr);
             gap: 15px;
             margin: 20px 0;
         }
         
-        .player-card {
-            background: rgba(255, 255, 255, 0.1);
+        .seat {
+            background: rgba(0, 0, 0, 0.3);
             border-radius: 15px;
             padding: 15px;
             text-align: center;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            border: 2px solid transparent;
             transition: all 0.3s;
         }
         
-        .player-card.ready {
-            border: 2px solid #38ef7d;
+        .seat.occupied {
+            background: rgba(255, 255, 255, 0.1);
         }
         
-        .player-card.is-host {
-            border: 2px solid #ffd700;
+        .seat.your-seat {
+            border-color: #ffd700;
         }
         
-        .player-card .name {
+        .seat.ai-seat {
+            border-color: #667eea;
+        }
+        
+        .seat.waiting {
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+        }
+        
+        .seat .player-name {
             font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 1.1em;
+        }
+        
+        .seat .player-type {
+            font-size: 0.8em;
+            color: #aaa;
             margin-bottom: 5px;
         }
         
-        .player-card .chips {
+        .seat .player-chips {
             color: #ffd700;
+            font-size: 0.9em;
         }
         
-        .player-card .status {
-            font-size: 0.8em;
-            color: #aaa;
+        .seat .player-status {
+            font-size: 0.75em;
+            color: #888;
             margin-top: 5px;
         }
         
-        /* 游戏桌面 */
+        .seat .seat-actions {
+            margin-top: 10px;
+        }
+        
+        /* 游戏界面 */
         .game-table {
             display: none;
         }
@@ -187,27 +190,24 @@
         
         .table {
             background: radial-gradient(ellipse at center, #1a5c2e 0%, #0d3d1a 100%);
-            border-radius: 50%;
-            padding: 40px;
+            border-radius: 20px;
+            padding: 30px;
             margin: 20px auto;
-            max-width: 800px;
-            min-height: 400px;
-            position: relative;
-            border: 10px solid #8b4513;
+            border: 8px solid #8b4513;
             box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
         }
         
         .players-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
+            gap: 15px;
             margin-bottom: 20px;
         }
         
         .game-player {
             background: rgba(0, 0, 0, 0.5);
-            border-radius: 15px;
-            padding: 15px;
+            border-radius: 12px;
+            padding: 12px;
             text-align: center;
         }
         
@@ -220,6 +220,10 @@
             opacity: 0.4;
         }
         
+        .game-player.is-ai {
+            background: rgba(102, 126, 234, 0.2);
+        }
+        
         @keyframes pulse {
             0%, 100% { box-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }
             50% { box-shadow: 0 0 25px rgba(255, 215, 0, 0.8); }
@@ -227,32 +231,26 @@
         
         .cards {
             display: flex;
-            gap: 5px;
+            gap: 3px;
             justify-content: center;
-            margin: 10px 0;
+            margin: 8px 0;
         }
         
         .card {
-            width: 50px;
-            height: 70px;
+            width: 40px;
+            height: 56px;
             background: #fff;
-            border-radius: 8px;
+            border-radius: 5px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.2em;
+            font-size: 0.9em;
             font-weight: bold;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
         }
         
-        .card.red {
-            color: #e74c3c;
-        }
-        
-        .card.black {
-            color: #2c3e50;
-        }
-        
+        .card.red { color: #e74c3c; }
+        .card.black { color: #2c3e50; }
         .card.hidden {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: #fff;
@@ -260,7 +258,7 @@
         
         .community-cards {
             text-align: center;
-            margin: 20px 0;
+            margin: 15px 0;
         }
         
         .community-cards .cards {
@@ -269,75 +267,51 @@
         
         .pot {
             text-align: center;
-            font-size: 1.5em;
+            font-size: 1.3em;
             color: #ffd700;
-            margin: 15px 0;
+            margin: 10px 0;
         }
         
-        /* 控制按钮 */
+        .phase-indicator {
+            text-align: center;
+            color: #aaa;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+        
         .controls {
             background: rgba(0, 0, 0, 0.5);
             border-radius: 15px;
-            padding: 20px;
-            margin-top: 20px;
+            padding: 15px;
+            margin-top: 15px;
         }
         
         .controls-row {
             display: flex;
             justify-content: center;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
         }
         
-        .call-btn {
-            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-        }
+        .call-btn { background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); }
+        .raise-btn { background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); }
+        .fold-btn { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); }
+        .check-btn { background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); }
         
-        .raise-btn {
-            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
-        }
-        
-        .fold-btn {
-            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-        }
-        
-        .check-btn {
-            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
-        }
-        
-        /* 消息 */
         .message {
             text-align: center;
-            padding: 15px;
+            padding: 12px;
             background: rgba(255, 255, 255, 0.1);
             border-radius: 10px;
-            margin: 15px 0;
+            margin: 10px 0;
         }
         
-        /* 隐藏 */
-        .hidden {
-            display: none !important;
-        }
+        .hidden { display: none !important; }
         
-        /* 响应式 */
         @media (max-width: 768px) {
-            h1 {
-                font-size: 1.8em;
-            }
-            
-            .table {
-                padding: 20px;
-                min-height: 300px;
-            }
-            
-            .players-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-            
-            .btn {
-                padding: 12px 20px;
-                font-size: 0.9em;
-            }
+            h1 { font-size: 1.5em; }
+            .seats-container, .players-grid { grid-template-columns: repeat(2, 1fr); }
+            .btn { padding: 10px 18px; font-size: 0.9em; }
         }
     </style>
 </head>
@@ -351,7 +325,7 @@
             
             <div class="form-group">
                 <label>你的昵称</label>
-                <input type="text" id="playerName" placeholder="输入你的昵称" maxlength="10">
+                <input type="text" id="playerName" placeholder="输入昵称" maxlength="8">
             </div>
             
             <div id="mainMenu" class="btn-row">
@@ -366,7 +340,7 @@
                 </div>
                 <div class="btn-row">
                     <button class="btn btn-success" onclick="joinRoom()">加入</button>
-                    <button class="btn btn-danger" onclick="hideJoinDialog()">取消</button>
+                    <button class="btn btn-secondary" onclick="hideJoinDialog()">取消</button>
                 </div>
             </div>
         </div>
@@ -374,17 +348,19 @@
         <!-- 房间界面 -->
         <div id="room" class="lobby hidden">
             <div class="room-info">
-                <div>房间码</div>
+                <div style="font-size:0.9em;color:#aaa;">房间码</div>
                 <div class="room-code" id="displayRoomCode">----</div>
+                <div style="font-size:0.8em;color:#888;margin-top:5px;">分享给朋友加入</div>
             </div>
             
-            <h2 style="text-align: center; margin-bottom: 15px;">玩家列表</h2>
-            <div class="players-list" id="playersList"></div>
+            <h2 style="font-size:1.1em;text-align:center;margin-bottom:10px;">选择座位</h2>
+            
+            <div class="seats-container" id="seatsContainer"></div>
             
             <div class="btn-row">
                 <button class="btn btn-success" id="readyBtn" onclick="toggleReady()">准备</button>
-                <button class="btn btn-primary" id="startBtn" onclick="startGame()" style="display: none;">开始游戏</button>
-                <button class="btn btn-danger" onclick="leaveRoom()">离开房间</button>
+                <button class="btn btn-primary" id="startBtn" onclick="startGame()">开始游戏</button>
+                <button class="btn btn-danger" onclick="leaveRoom()">离开</button>
             </div>
         </div>
         
@@ -392,12 +368,16 @@
         <div id="game" class="game-table hidden">
             <div class="message" id="gameMessage">等待游戏开始...</div>
             
-            <div class="players-grid" id="gamePlayers"></div>
-            
-            <div class="community-cards">
-                <div style="color: #ffd700; margin-bottom: 10px;">公共牌</div>
-                <div class="cards" id="communityCards"></div>
-                <div class="pot" id="potDisplay">底池: 0</div>
+            <div class="table">
+                <div class="phase-indicator" id="phaseIndicator">翻牌前</div>
+                
+                <div class="players-grid" id="gamePlayers"></div>
+                
+                <div class="community-cards">
+                    <div style="color: #ffd700; font-size: 0.9em; margin-bottom: 5px;">公共牌</div>
+                    <div class="cards" id="communityCards"></div>
+                    <div class="pot" id="potDisplay">底池: 0</div>
+                </div>
             </div>
             
             <div class="controls" id="gameControls">
@@ -415,6 +395,10 @@
         let myPlayerId = null;
         let isHost = false;
         let gameState = null;
+        let roomData = null;
+        
+        // AI名称列表
+        const aiNames = ['小明', '小红', '老王', '阿强', '小美'];
         
         // 创建房间
         function createRoom() {
@@ -422,19 +406,16 @@
             socket.emit('createRoom', { name });
         }
         
-        // 显示加入对话框
         function showJoinDialog() {
             document.getElementById('mainMenu').classList.add('hidden');
             document.getElementById('joinDialog').classList.remove('hidden');
         }
         
-        // 隐藏加入对话框
         function hideJoinDialog() {
             document.getElementById('mainMenu').classList.remove('hidden');
             document.getElementById('joinDialog').classList.add('hidden');
         }
         
-        // 加入房间
         function joinRoom() {
             const name = document.getElementById('playerName').value.trim() || '玩家';
             const roomCode = document.getElementById('roomCodeInput').value.trim().toUpperCase();
@@ -447,13 +428,27 @@
             socket.emit('joinRoom', { name, roomCode });
         }
         
-        // 离开房间
         function leaveRoom() {
             socket.disconnect();
             location.reload();
         }
         
-        // 准备/取消准备
+        // 选择座位
+        function selectSeat(seatIndex) {
+            socket.emit('selectSeat', { roomCode: currentRoomCode, seatIndex });
+        }
+        
+        // 添加AI
+        function addAI(seatIndex) {
+            socket.emit('addAI', { roomCode: currentRoomCode, seatIndex });
+        }
+        
+        // 移除AI
+        function removeAI(seatIndex) {
+            socket.emit('removeAI', { roomCode: currentRoomCode, seatIndex });
+        }
+        
+        // 准备
         function toggleReady() {
             socket.emit('ready', { roomCode: currentRoomCode });
         }
@@ -463,7 +458,7 @@
             socket.emit('startGame', { roomCode: currentRoomCode });
         }
         
-        // Socket 事件
+        // Socket事件
         socket.on('roomCreated', (data) => {
             currentRoomCode = data.roomCode;
             myPlayerId = data.playerId;
@@ -478,6 +473,7 @@
         });
         
         socket.on('roomUpdate', (data) => {
+            roomData = data;
             updateRoomUI(data);
         });
         
@@ -490,33 +486,66 @@
             alert(data.message);
         });
         
-        // 显示房间界面
         function showRoom() {
             document.getElementById('lobby').classList.add('hidden');
             document.getElementById('room').classList.remove('hidden');
             document.getElementById('displayRoomCode').textContent = currentRoomCode;
         }
         
-        // 更新房间UI
         function updateRoomUI(data) {
-            const playersList = document.getElementById('playersList');
-            playersList.innerHTML = data.players.map(p => `
-                <div class="player-card ${p.ready ? 'ready' : ''} ${p.isHost ? 'is-host' : ''}">
-                    <div class="name">${p.name}${p.isHost ? ' 👑' : ''}</div>
-                    <div class="chips">💰 ${p.chips}</div>
-                    <div class="status">${p.ready ? '✅ 已准备' : '⏳ 未准备'}</div>
-                </div>
-            `).join('');
+            const container = document.getElementById('seatsContainer');
+            let html = '';
             
-            const me = data.players.find(p => p.id === myPlayerId);
-            if (me) {
-                isHost = me.isHost;
-                document.getElementById('readyBtn').textContent = me.ready ? '取消准备' : '准备';
-                document.getElementById('startBtn').style.display = isHost ? 'inline-block' : 'none';
+            for (let i = 0; i < 6; i++) {
+                const player = data.seats[i];
+                const isMySeat = player && player.id === myPlayerId;
+                
+                if (player) {
+                    // 座位已被占用
+                    const seatClass = isMySeat ? 'your-seat' : (player.isAI ? 'ai-seat' : 'occupied');
+                    const typeLabel = player.isAI ? '🤖 电脑' : '👤 玩家';
+                    const statusText = player.ready ? '✅ 已准备' : '⏳ 未准备';
+                    
+                    html += `
+                        <div class="seat ${seatClass}">
+                            <div class="player-name">${player.name}${isMySeat ? ' (你)' : ''}</div>
+                            <div class="player-type">${typeLabel}</div>
+                            <div class="player-chips">💰 ${player.chips}</div>
+                            <div class="player-status">${statusText}</div>
+                            ${player.isAI && isHost ? `<div class="seat-actions"><button class="btn btn-small btn-danger" onclick="removeAI(${i})">移除</button></div>` : ''}
+                        </div>
+                    `;
+                } else {
+                    // 空座位
+                    html += `
+                        <div class="seat waiting">
+                            <div style="color:#666;">座位 ${i + 1}</div>
+                            <div style="font-size:0.8em;color:#555;margin:5px 0;">空位</div>
+                            <div class="seat-actions">
+                                <button class="btn btn-small btn-primary" onclick="selectSeat(${i})">坐下</button>
+                                ${isHost ? `<button class="btn btn-small btn-secondary" onclick="addAI(${i})">+AI</button>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
             }
+            
+            container.innerHTML = html;
+            
+            // 更新按钮状态
+            const me = data.seats.find(s => s && s.id === myPlayerId);
+            if (me) {
+                document.getElementById('readyBtn').textContent = me.ready ? '取消准备' : '准备';
+                document.getElementById('readyBtn').classList.toggle('btn-warning', me.ready);
+                document.getElementById('readyBtn').classList.toggle('btn-success', !me.ready);
+            }
+            
+            // 只有房主能开始，且至少2人
+            const occupiedSeats = data.seats.filter(s => s !== null);
+            const allReady = occupiedSeats.every(s => s.ready);
+            document.getElementById('startBtn').style.display = (isHost && occupiedSeats.length >= 2 && allReady) ? 'inline-block' : 'none';
         }
         
-        // 更新游戏UI
         function updateGameUI() {
             document.getElementById('room').classList.add('hidden');
             document.getElementById('game').classList.remove('hidden');
@@ -524,34 +553,7 @@
             
             if (!gameState) return;
             
-            // 更新玩家
-            const playersGrid = document.getElementById('gamePlayers');
-            playersGrid.innerHTML = gameState.players.map((p, i) => `
-                <div class="game-player ${i === gameState.currentPlayerIndex ? 'current' : ''} ${p.folded ? 'folded' : ''}">
-                    <div class="name">${p.name}${p.id === myPlayerId ? ' (你)' : ''}</div>
-                    <div class="chips">💰 ${p.chips}</div>
-                    <div class="cards">
-                        ${p.hand.map(c => c.hidden ? 
-                            '<div class="card hidden">?</div>' : 
-                            `<div class="card ${c.suit === '♥' || c.suit === '♦' ? 'red' : 'black'}">${c.suit}${c.rank}</div>`
-                        ).join('')}
-                    </div>
-                    <div style="font-size: 0.8em; color: #aaa;">
-                        ${p.folded ? '已弃牌' : p.isAllIn ? 'All In' : `下注: ${p.bet}`}
-                    </div>
-                </div>
-            `).join('');
-            
-            // 更新公共牌
-            const communityCards = document.getElementById('communityCards');
-            communityCards.innerHTML = gameState.communityCards.map(c => 
-                `<div class="card ${c.suit === '♥' || c.suit === '♦' ? 'red' : 'black'}">${c.suit}${c.rank}</div>`
-            ).join('');
-            
-            // 更新底池
-            document.getElementById('potDisplay').textContent = `底池: ${gameState.pot}`;
-            
-            // 更新消息
+            // 阶段名称
             const phaseNames = {
                 'waiting': '等待中',
                 'preflop': '翻牌前',
@@ -560,42 +562,74 @@
                 'river': '河牌',
                 'showdown': '摊牌'
             };
+            document.getElementById('phaseIndicator').textContent = phaseNames[gameState.phase] || gameState.phase;
             
+            // 玩家列表
+            const playersGrid = document.getElementById('gamePlayers');
+            playersGrid.innerHTML = gameState.players.map((p, i) => {
+                if (!p) return '<div class="game-player" style="opacity:0.3;"><div style="color:#666;">空位</div></div>';
+                
+                const isCurrent = i === gameState.currentPlayerIndex;
+                const isMe = p.id === myPlayerId;
+                const cardsHtml = p.hand.map(c => 
+                    c.hidden ? '<div class="card hidden">?</div>' :
+                    `<div class="card ${c.suit === '♥' || c.suit === '♦' ? 'red' : 'black'}">${c.suit}${c.rank}</div>`
+                ).join('');
+                
+                return `
+                    <div class="game-player ${isCurrent ? 'current' : ''} ${p.folded ? 'folded' : ''} ${p.isAI ? 'is-ai' : ''}">
+                        <div style="font-weight:bold;">${p.name}${isMe ? ' (你)' : ''}${p.isAI ? ' 🤖' : ''}</div>
+                        <div style="font-size:0.8em;color:#ffd700;">💰 ${p.chips}</div>
+                        <div class="cards">${isMe || gameState.phase === 'showdown' ? cardsHtml : '<div class="card hidden">?</div><div class="card hidden">?</div>'}</div>
+                        <div style="font-size:0.75em;color:#aaa;">
+                            ${p.folded ? '已弃牌' : p.isAllIn ? 'All In!' : `下注: ${p.bet}`}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // 公共牌
+            const communityCards = document.getElementById('communityCards');
+            communityCards.innerHTML = gameState.communityCards.map(c => 
+                `<div class="card ${c.suit === '♥' || c.suit === '♦' ? 'red' : 'black'}">${c.suit}${c.rank}</div>`
+            ).join('') || '<div style="color:#666;font-size:0.9em;">等待发牌...</div>';
+            
+            // 底池
+            document.getElementById('potDisplay').textContent = `底池: ${gameState.pot}`;
+            
+            // 消息
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-            let message = `${phaseNames[gameState.phase] || gameState.phase}`;
+            let message = '';
             
-            if (gameState.gameActive && currentPlayer) {
+            if (gameState.phase === 'showdown') {
+                message = '🎉 摊牌！';
+            } else if (currentPlayer) {
                 if (currentPlayer.id === myPlayerId) {
                     message = '轮到你行动！';
                 } else {
-                    message = `等待 ${currentPlayer.name} 行动...`;
+                    message = `等待 ${currentPlayer.name}${currentPlayer.isAI ? '(AI)' : ''} 行动...`;
                 }
-            }
-            
-            if (gameState.phase === 'showdown') {
-                message = '摊牌！';
             }
             
             document.getElementById('gameMessage').textContent = message;
             
-            // 更新控制按钮
+            // 控制按钮
             updateControls();
         }
         
-        // 更新控制按钮
         function updateControls() {
             const controls = document.getElementById('gameControls');
             
             if (!gameState || !gameState.gameActive) {
                 controls.innerHTML = `
                     <div class="controls-row">
-                        <button class="btn" disabled>游戏结束</button>
+                        <button class="btn btn-primary" onclick="backToRoom()">返回房间</button>
                     </div>
                 `;
                 return;
             }
             
-            const myIndex = gameState.players.findIndex(p => p.id === myPlayerId);
+            const myIndex = gameState.players.findIndex(p => p && p.id === myPlayerId);
             if (myIndex === -1 || gameState.currentPlayerIndex !== myIndex) {
                 controls.innerHTML = `
                     <div class="controls-row">
@@ -631,9 +665,8 @@
             controls.innerHTML = html;
         }
         
-        // 显示加注选项
         function showRaise() {
-            const me = gameState.players.find(p => p.id === myPlayerId);
+            const me = gameState.players.find(p => p && p.id === myPlayerId);
             const minRaise = gameState.currentBet + gameState.bigBlind;
             const maxRaise = me.chips + me.bet;
             
@@ -643,13 +676,17 @@
             }
         }
         
-        // 玩家行动
         function playerAction(action, amount = 0) {
             socket.emit('playerAction', {
                 roomCode: currentRoomCode,
                 action,
                 amount
             });
+        }
+        
+        function backToRoom() {
+            document.getElementById('game').classList.add('hidden');
+            document.getElementById('room').classList.remove('hidden');
         }
     </script>
 </body>
