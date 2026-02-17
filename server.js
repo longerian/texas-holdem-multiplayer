@@ -400,20 +400,23 @@ function showdown(room) {
   const winner = activePlayers[Math.floor(Math.random() * activePlayers.length)];
   winner.chips += gs.pot;
   
+  console.log(`showdown: ${winner.name} 获胜，赢得 ${gs.pot} 筹码`);
+  
+  // 更新房间中玩家的筹码
+  gs.players.forEach((p, i) => {
+    if (p && room.seats[i]) {
+      room.seats[i].chips = p.chips;
+    }
+  });
+  
   broadcastGameState(room.code);
   
   // 3秒后可以开始新一局
   setTimeout(() => {
     gs.gameActive = false;
     gs.phase = 'waiting';
-    
-    // 更新房间中玩家的筹码
-    gs.players.forEach((p, i) => {
-      if (p && room.seats[i]) {
-        room.seats[i].chips = p.chips;
-      }
-    });
-    
+    console.log('游戏结束，返回房间');
+    broadcastGameState(room.code);
     broadcastRoomState(room.code);
   }, 3000);
 }
@@ -424,18 +427,22 @@ function endRound(room, winner) {
   gs.phase = 'showdown';
   winner.chips += gs.pot;
   
+  console.log(`endRound: ${winner.name} 获胜，赢得 ${gs.pot} 筹码`);
+  
+  // 更新房间中玩家的筹码
+  gs.players.forEach((p, i) => {
+    if (p && room.seats[i]) {
+      room.seats[i].chips = p.chips;
+    }
+  });
+  
   broadcastGameState(room.code);
   
   setTimeout(() => {
     gs.gameActive = false;
     gs.phase = 'waiting';
-    
-    gs.players.forEach((p, i) => {
-      if (p && room.seats[i]) {
-        room.seats[i].chips = p.chips;
-      }
-    });
-    
+    console.log('游戏结束，返回房间');
+    broadcastGameState(room.code);
     broadcastRoomState(room.code);
   }, 2000);
 }

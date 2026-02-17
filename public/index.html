@@ -294,7 +294,7 @@
         }
         
         .call-btn { background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); }
-        .raise-btn { background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); }
+        .raise-btn { background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%); color: #fff; }
         .fold-btn { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); }
         .check-btn { background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); }
         
@@ -602,7 +602,16 @@
             let message = '';
             
             if (gameState.phase === 'showdown') {
-                message = '🎉 摊牌！';
+                // 找出获胜者（筹码增加最多的玩家）
+                const winner = gameState.players.find(p => p && p.id === myPlayerId);
+                if (winner) {
+                    message = '🎉 你获胜了！';
+                } else {
+                    const anyWinner = gameState.players.find(p => p && !p.folded);
+                    message = anyWinner ? `🎉 ${anyWinner.name} 获胜！` : '🎉 游戏结束！';
+                }
+            } else if (!gameState.gameActive) {
+                message = '游戏结束';
             } else if (currentPlayer) {
                 if (currentPlayer.id === myPlayerId) {
                     message = '轮到你行动！';
