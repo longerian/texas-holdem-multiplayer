@@ -186,9 +186,16 @@ function startGame(room) {
   
   // 从大盲后开始
   gs.currentPlayerIndex = (bbIndex + 1) % 6;
-  while (!gs.players[gs.currentPlayerIndex] || gs.players[gs.currentPlayerIndex].isAllIn) {
+  let safety = 0;
+  while ((!gs.players[gs.currentPlayerIndex] || 
+          gs.players[gs.currentPlayerIndex].folded || 
+          gs.players[gs.currentPlayerIndex].isAllIn ||
+          gs.players[gs.currentPlayerIndex].chips <= 0) && safety < 12) {
     gs.currentPlayerIndex = (gs.currentPlayerIndex + 1) % 6;
+    safety++;
   }
+  
+  console.log(`游戏开始，当前玩家: ${gs.players[gs.currentPlayerIndex]?.name}, index: ${gs.currentPlayerIndex}`);
   
   broadcastGameState(room.code);
   
@@ -223,13 +230,19 @@ function aiTurn(room) {
   const handStrength = evaluateHandStrength(player.hand, gs.communityCards);
   
   let decision = 'fold';
+  let raiseAmount = 0;
   const rand = Math.random();
   
   // 简单AI逻辑
   if (toCall === 0) {
     // 没人下注
     if (handStrength > 0.5 || rand < 0.4) {
-      decision = rand < 0.3 ? 'raise' : 'check';
+      if (rand < 0.3 && player.chips > gs.bigBlind * 2) {
+        decision = 'raise';
+        raiseAmount = Math.min(gs.pot * 0.5 + gs.currentBet, player.chips + player.bet);
+      } else {
+        decision = 'check';
+      }
     } else {
       decision = 'check';
     }
@@ -238,7 +251,12 @@ function aiTurn(room) {
     const potOdds = toCall / (gs.pot + toCall);
     
     if (handStrength > 0.6) {
-      decision = rand < 0.5 ? 'raise' : 'call';
+      if (rand < 0.5 && player.chips > toCall * 2) {
+        decision = 'raise';
+        raiseAmount = Math.min(gs.currentBet * 2 + gs.pot * 0.5, player.chips + player.bet);
+      } else {
+        decision = 'call';
+      }
     } else if (handStrength > 0.35 || potOdds < 0.3) {
       decision = rand < 0.7 ? 'call' : 'fold';
     } else if (rand < 0.2) {
@@ -248,14 +266,25 @@ function aiTurn(room) {
     }
   }
   
+  // 确保加注金额至少是最小加注
+  if (decision === 'raise') {
+    const minRaise = gs.currentBet + gs.bigBlind;
+    raiseAmount = Math.max(raiseAmount, minRaise);
+    raiseAmount = Math.min(raiseAmount, player.chips + player.bet);
+  }
+  
+  console.log(`AI ${player.name} decision: ${decision}, raiseAmount: ${raiseAmount}`);
+  
   // 执行决策
-  executeAction(room, player, decision);
+  executeAction(room, player, decision, raiseAmount);
 }
 
 // 执行玩家行动
 function executeAction(room, player, action, amount = 0) {
   const gs = room.gameState;
   const playerIndex = player.index;
+  
+  console.log(`执行行动: ${player.name} ${action} ${amount}`);
   
   switch (action) {
     case 'fold':
@@ -283,11 +312,14 @@ function executeAction(room, player, action, amount = 0) {
       const raiseAmount = Math.min(amount, player.chips + player.bet);
       const toCallNew = raiseAmount - player.bet;
       
+      console.log(`加注: raiseAmount=${raiseAmount}, toCallNew=${toCallNew}, chips=${player.chips}`);
+      
       if (toCallNew >= player.chips) {
         gs.pot += player.chips;
         player.bet += player.chips;
         player.chips = 0;
         player.isAllIn = true;
+        gs.currentBet = Math.max(gs.currentBet, player.bet);
       } else {
         player.chips -= toCallNew;
         player.bet = raiseAmount;
@@ -368,6 +400,7 @@ function nextPlayer(room) {
       
       if (needsToAct) {
         gs.currentPlayerIndex = nextIndex;
+        console.log(`下一个玩家: ${nextPlayer.name}, index: ${nextIndex}, isAI: ${nextPlayer.isAI}`);
         broadcastGameState(room.code);
         checkAITurn(room);
         return;
@@ -378,6 +411,7 @@ function nextPlayer(room) {
     attempts++;
   }
   
+  console.log('进入下一阶段');
   // 进入下一阶段
   nextPhase(room);
 }
@@ -411,13 +445,23 @@ function nextPhase(room) {
   
   // 从庄家后第一个活跃玩家开始
   let startIndex = (gs.dealerIndex + 1) % 6;
+  let found = false;
   for (let i = 0; i < 6; i++) {
     const player = gs.players[startIndex];
     if (player && !player.folded && !player.isAllIn && player.chips > 0) {
       gs.currentPlayerIndex = startIndex;
+      found = true;
+      console.log(`新阶段 ${gs.phase}，当前玩家: ${player.name}`);
       break;
     }
     startIndex = (startIndex + 1) % 6;
+  }
+  
+  // 如果没找到可行动的玩家，直接摊牌
+  if (!found) {
+    console.log('没有可行动的玩家，直接摊牌');
+    showdown(room);
+    return;
   }
   
   broadcastGameState(room.code);
