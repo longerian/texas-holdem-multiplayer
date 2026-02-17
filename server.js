@@ -2,7 +2,7 @@ const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-const { aiDecision } = require('./ai-engine');
+const { aiDecision, recordPlayerAction, resetTracking } = require('./ai-engine');
 
 const app = express();
 const httpServer = createServer(app);
@@ -118,6 +118,9 @@ function broadcastGameState(roomCode) {
 // 开始游戏
 function startGame(room) {
   const gs = room.gameState;
+  
+  // 重置追踪
+  resetTracking();
   
   // 获取所有有人的座位
   const activePlayers = room.seats.filter(s => s !== null);
@@ -427,6 +430,9 @@ function endRound(room, winner) {
   gs.phase = 'showdown';
   winner.chips += gs.pot;
   
+  // 保存获胜者信息
+  gs.winner = { name: winner.name, chips: winner.chips, pot: gs.pot };
+  
   console.log(`endRound: ${winner.name} 获胜，赢得 ${gs.pot} 筹码`);
   
   // 更新房间中玩家的筹码
@@ -440,8 +446,8 @@ function endRound(room, winner) {
   
   setTimeout(() => {
     gs.gameActive = false;
-    gs.phase = 'waiting';
-    console.log('游戏结束，返回房间');
+    gs.phase = 'finished';
+    console.log('游戏结束，可以开始下一局');
     broadcastGameState(room.code);
     broadcastRoomState(room.code);
   }, 2000);
@@ -602,7 +608,35 @@ io.on('connection', (socket) => {
     const player = gs.players[gs.currentPlayerIndex];
     if (!player || player.id !== socket.id) return;
     
+    // 记录玩家行动（用于AI追踪攻击性）
+    recordPlayerAction(data.action);
+    
     executeAction(room, player, data.action, data.amount || 0);
+  });
+  
+  // 开始下一局
+  socket.on('startNextGame', (roomCode) => {
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    
+    // 只有房主可以开始
+    if (room.hostId !== socket.id) return;
+    
+    // 重新初始化玩家状态
+    room.seats.forEach((seat, i) => {
+      if (seat) {
+        seat.folded = false;
+        seat.bet = 0;
+        seat.hand = null;
+        seat.isAllIn = false;
+        if (seat.chips <= 0) {
+          seat.chips = 1000; // 补充筹码
+        }
+        room.gameState.players[i] = seat;
+      }
+    });
+    
+    startGame(room);
   });
   
   // 断开连接

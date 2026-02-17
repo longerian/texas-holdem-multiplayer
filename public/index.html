@@ -601,12 +601,17 @@
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
             let message = '';
             
-            if (gameState.phase === 'showdown') {
-                // 找出获胜者（筹码增加最多的玩家）
-                const winner = gameState.players.find(p => p && p.id === myPlayerId);
-                if (winner) {
-                    message = '🎉 你获胜了！';
+            if (gameState.phase === 'finished' || gameState.phase === 'showdown') {
+                // 显示获胜者
+                if (gameState.winner) {
+                    if (gameState.winner.name) {
+                        const isMe = gameState.players.find(p => p && p.id === myPlayerId && p.name === gameState.winner.name);
+                        message = isMe ? `🎉 你获胜了！赢得 ${gameState.winner.pot} 筹码！` : `🎉 ${gameState.winner.name} 获胜！赢得 ${gameState.winner.pot} 筹码！`;
+                    } else {
+                        message = '🎉 游戏结束！';
+                    }
                 } else {
+                    // 兼容旧逻辑
                     const anyWinner = gameState.players.find(p => p && !p.folded);
                     message = anyWinner ? `🎉 ${anyWinner.name} 获胜！` : '🎉 游戏结束！';
                 }
@@ -630,9 +635,12 @@
             const controls = document.getElementById('gameControls');
             
             if (!gameState || !gameState.gameActive) {
+                // 游戏结束，显示下一局和返回房间按钮
+                const isHost = currentRoomCode && rooms_data && rooms_data[currentRoomCode] === myPlayerId;
                 controls.innerHTML = `
                     <div class="controls-row">
-                        <button class="btn btn-primary" onclick="backToRoom()">返回房间</button>
+                        <button class="btn btn-primary" onclick="startNextGame()" style="background:#4CAF50;margin-right:10px;">下一局</button>
+                        <button class="btn" onclick="backToRoom()">返回房间</button>
                     </div>
                 `;
                 return;
@@ -691,6 +699,10 @@
                 action,
                 amount
             });
+        }
+        
+        function startNextGame() {
+            socket.emit('startNextGame', currentRoomCode);
         }
         
         function backToRoom() {

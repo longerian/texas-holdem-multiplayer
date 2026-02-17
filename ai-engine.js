@@ -1,56 +1,21 @@
-// T1 职业牌手 AI 引擎（移植自 T0）
+// T1 职业牌手 AI 引擎 v2（大幅加强版）
 
 const SUITS = ['♠', '♥', '♦', '♣'];
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 
+// 全局追踪玩家行为
+let playerAggression = 0.3;
+let playerRaiseCount = 0;
+let playerTotalActions = 0;
+
 // AI风格配置
 function getAIPlayerStyle(playerId) {
     const styles = [
-        { 
-            aggression: 0.82, bluffRate: 0.28, cbetRate: 0.78, foldTo3bet: 0.3,
-            name: '职业TAG',
-            gto: {
-                aa: { raise: 0.85, call: 0.15 }, kk: { raise: 0.8, call: 0.2 },
-                qq: { raise: 0.7, call: 0.3 }, ak: { raise: 0.75, call: 0.25 },
-                aq: { raise: 0.6, call: 0.4 }
-            }
-        },
-        { 
-            aggression: 0.75, bluffRate: 0.25, cbetRate: 0.72, foldTo3bet: 0.32,
-            name: 'GTO专家',
-            gto: {
-                aa: { raise: 0.8, call: 0.2 }, kk: { raise: 0.75, call: 0.25 },
-                qq: { raise: 0.65, call: 0.35 }, ak: { raise: 0.72, call: 0.28 },
-                aq: { raise: 0.58, call: 0.42 }
-            }
-        },
-        { 
-            aggression: 0.88, bluffRate: 0.35, cbetRate: 0.85, foldTo3bet: 0.22,
-            name: '职业LAG',
-            gto: {
-                aa: { raise: 0.78, call: 0.22 }, kk: { raise: 0.72, call: 0.28 },
-                qq: { raise: 0.6, call: 0.4 }, ak: { raise: 0.8, call: 0.2 },
-                aq: { raise: 0.68, call: 0.32 }
-            }
-        },
-        { 
-            aggression: 0.92, bluffRate: 0.4, cbetRate: 0.9, foldTo3bet: 0.15,
-            name: '超凶鲨鱼',
-            gto: {
-                aa: { raise: 0.75, call: 0.25 }, kk: { raise: 0.7, call: 0.3 },
-                qq: { raise: 0.55, call: 0.45 }, ak: { raise: 0.82, call: 0.18 },
-                aq: { raise: 0.75, call: 0.25 }
-            }
-        },
-        { 
-            aggression: 0.78, bluffRate: 0.3, cbetRate: 0.75, foldTo3bet: 0.28,
-            name: '策略大师',
-            gto: {
-                aa: { raise: 0.82, call: 0.18 }, kk: { raise: 0.78, call: 0.22 },
-                qq: { raise: 0.68, call: 0.32 }, ak: { raise: 0.78, call: 0.22 },
-                aq: { raise: 0.62, call: 0.38 }
-            }
-        }
+        { aggression: 0.85, bluffRate: 0.35, callRate: 0.7, name: '职业TAG' },
+        { aggression: 0.8, bluffRate: 0.3, callRate: 0.75, name: 'GTO专家' },
+        { aggression: 0.9, bluffRate: 0.4, callRate: 0.8, name: '职业LAG' },
+        { aggression: 0.95, bluffRate: 0.45, callRate: 0.85, name: '超凶鲨鱼' },
+        { aggression: 0.82, bluffRate: 0.32, callRate: 0.72, name: '策略大师' }
     ];
     return styles[(playerId - 1) % styles.length];
 }
@@ -66,15 +31,24 @@ function evaluateHandStrength(hand, community) {
     const highCard = Math.max(rank1, rank2);
     const gap = Math.abs(rank1 - rank2);
     
-    let strength = 0.15;
+    let strength = 0.2;
     
     if (isPair) {
-        strength = 0.45 + (rank1 / RANKS.length) * 0.45;
+        strength = 0.5 + (rank1 / RANKS.length) * 0.45;
     } else {
-        strength = (highCard / RANKS.length) * 0.25;
-        if (isSuited) strength += 0.08;
-        if (gap <= 2) strength += 0.06;
-        if (highCard >= 11 && gap <= 2) strength += 0.12;
+        strength = (highCard / RANKS.length) * 0.3;
+        if (isSuited) strength += 0.1;
+        if (gap <= 2) strength += 0.08;
+        if (highCard >= 11 && gap <= 2) strength += 0.15;
+    }
+    
+    // 有公共牌时评估成牌
+    if (community && community.length > 0) {
+        const allCards = [...hand, ...community];
+        const handRank = evaluateHand(allCards);
+        if (handRank.rank >= 3) strength = Math.max(strength, 0.7);
+        else if (handRank.rank >= 2) strength = Math.max(strength, 0.5);
+        else if (handRank.rank >= 1) strength = Math.max(strength, 0.35);
     }
     
     return Math.min(strength, 1);
@@ -82,24 +56,32 @@ function evaluateHandStrength(hand, community) {
 
 // 详细牌力评估
 function evaluateHandStrengthDetailed(hand, community) {
-    const allCards = [...hand, ...(community || [])];
-    if (allCards.length < 2) return { tier: 1, name: '高牌', drawStrength: 0 };
+    const allCards = [...(hand || []), ...(community || [])];
+    if (allCards.length < 2) return { tier: 1, drawStrength: 0 };
     
     const handRank = evaluateHand(allCards);
     const drawStrength = evaluateDrawStrength(hand, community);
     
+    // tier: 1=高牌, 2=一对, 3=两对/三条, 4=顺子/同花/葫芦, 5=四条/同花顺
     let tier = 1;
-    if (handRank.rank >= 8) tier = 5;
-    else if (handRank.rank === 7) tier = 4;
-    else if (handRank.rank >= 5) tier = 3;
-    else if (handRank.rank >= 3) tier = 2;
+    if (handRank.rank >= 7) tier = 5;
+    else if (handRank.rank >= 5) tier = 4;
+    else if (handRank.rank >= 3) tier = 3;
+    else if (handRank.rank >= 1) tier = 2;
     
-    return { tier, name: handRank.name, drawStrength };
+    return { tier, drawStrength };
 }
 
 // 评估一手牌
 function evaluateHand(cards) {
     if (!cards || cards.length < 5) {
+        // 手牌评估
+        if (cards && cards.length === 2) {
+            const r1 = RANKS.indexOf(cards[0].rank);
+            const r2 = RANKS.indexOf(cards[1].rank);
+            if (cards[0].rank === cards[1].rank) return { rank: 1, name: '一对' };
+            return { rank: 0, name: '高牌', highCard: Math.max(r1, r2) };
+        }
         return { rank: 0, name: '高牌', highCard: 0 };
     }
     
@@ -123,11 +105,6 @@ function evaluateHand(cards) {
             isStraight = true;
             straightHigh = sortedRanks[i + 4];
         }
-    }
-    // A-2-3-4-5 顺子
-    if (sortedRanks.includes(12) && sortedRanks.includes(0) && sortedRanks.includes(1) && sortedRanks.includes(2) && sortedRanks.includes(3)) {
-        isStraight = true;
-        straightHigh = 3;
     }
     
     const counts = Object.values(rankCounts).sort((a, b) => b - a);
@@ -161,7 +138,7 @@ function evaluateDrawStrength(hand, community) {
 }
 
 // 位置优势
-function getPositionAdvantage(playerIndex, totalPlayers) {
+function getPositionAdvantage(playerIndex) {
     const positions = [0.5, 0.3, 0.4, 0.6, 0.8, 1.0];
     return positions[playerIndex % 6];
 }
@@ -183,20 +160,17 @@ function getPreflopStrength(hand) {
         if (r1 >= 11) return 0.92;
         if (r1 >= 10) return 0.85;
         if (r1 >= 9) return 0.72;
-        if (r1 >= 8) return 0.62;
         return 0.5 + r1 * 0.02;
     }
     
     let strength = 0.2;
-    strength += (high / 12) * 0.3;
+    strength += (high / 12) * 0.35;
+    if (isSuited) strength += 0.1;
+    if (gap <= 1) strength += 0.12;
     
-    if (isSuited) strength += 0.08;
-    if (gap <= 1) strength += 0.1;
-    else if (gap <= 2) strength += 0.05;
-    
-    if (high === 12 && low === 11) strength = 0.88;
-    else if (high === 12 && low === 10) strength = 0.78;
-    else if (high === 11 && low === 10) strength = 0.68;
+    if (high === 12 && low === 11) strength = 0.9;
+    else if (high === 12 && low === 10) strength = 0.8;
+    else if (high === 11 && low === 10) strength = 0.7;
     
     return Math.min(strength, 1);
 }
@@ -222,50 +196,20 @@ function getHandType(hand) {
     
     if (high === 'A' && low === 'K') return 'AK' + suffix;
     if (high === 'A' && low === 'Q') return 'AQ' + suffix;
-    if (high === 'A' && low === 'J') return 'AJ' + suffix;
-    if (high === 'K' && low === 'Q') return 'KQ' + suffix;
     
     return high + low + suffix;
-}
-
-// 判断是否面对3-bet
-function isFacing3Bet(currentBet, bigBlind) {
-    return currentBet > bigBlind * 3;
-}
-
-// 分析牌面结构
-function analyzeBoardTexture(community) {
-    if (!community || community.length < 3) return 'dry';
-    
-    const suits = community.map(c => c.suit);
-    const ranks = community.map(c => RANKS.indexOf(c.rank));
-    
-    const suitCounts = {};
-    suits.forEach(s => suitCounts[s] = (suitCounts[s] || 0) + 1);
-    const maxSuit = Math.max(...Object.values(suitCounts));
-    
-    if (maxSuit >= 3) return 'wet';
-    
-    const connected = ranks.some((r, i) => 
-        i < ranks.length - 1 && Math.abs(r - ranks[i + 1]) <= 2
-    );
-    if (connected) return 'wet';
-    
-    return 'dry';
 }
 
 // 主AI决策函数
 function aiDecision(player, gameState, room) {
     const toCall = gameState.currentBet - player.bet;
     const style = getAIPlayerStyle(player.index);
-    const positionAdv = getPositionAdvantage(player.index, 6);
+    const positionAdv = getPositionAdvantage(player.index);
     const potOddsForCall = toCall > 0 ? toCall / (gameState.pot + toCall) : 0;
-    const potOddsGood = potOddsForCall < 0.33;
+    const potOddsGood = potOddsForCall < 0.35;
     const potOddsDecent = potOddsForCall < 0.5;
     const callCost = player.chips > 0 ? toCall / player.chips : 1;
     const spr = player.chips > 0 ? player.chips / Math.max(1, gameState.pot) : 0;
-    const facing3bet = isFacing3Bet(gameState.currentBet, gameState.bigBlind);
-    const boardTexture = analyzeBoardTexture(gameState.communityCards);
     
     let decision = 'fold';
     let raiseAmount = 0;
@@ -275,21 +219,10 @@ function aiDecision(player, gameState, room) {
     const detailedStrength = evaluateHandStrengthDetailed(player.hand, gameState.communityCards);
     const drawStrength = detailedStrength.drawStrength || 0;
     
-    // GTO决策辅助
-    function gtoDecision(handType) {
-        const gto = style.gto;
-        if (!gto) return null;
-        
-        let freq = null;
-        if (handType === 'AA') freq = gto.aa;
-        else if (handType === 'KK') freq = gto.kk;
-        else if (handType === 'QQ') freq = gto.qq;
-        else if (handType.startsWith('AK')) freq = gto.ak;
-        else if (handType.startsWith('AQ')) freq = gto.aq;
-        
-        if (!freq) return null;
-        return Math.random() < freq.raise ? 'raise' : 'call';
-    }
+    // 检测玩家攻击性（用于判断是否诈唬）
+    const highBluffSuspicion = playerAggression > 0.5;
+    
+    console.log(`AI ${player.name}: tier=${detailedStrength.tier}, strength=${handStrength.toFixed(2)}, toCall=${toCall}, potOdds=${potOddsForCall.toFixed(2)}, suspicion=${highBluffSuspicion}`);
     
     // 翻牌前策略
     if (gameState.phase === 'preflop') {
@@ -298,113 +231,108 @@ function aiDecision(player, gameState, room) {
         const preflopPotOdds = toCall > 0 ? toCall / (gameState.pot + toCall) : 0;
         
         if (toCall > 0) {
-            if (facing3bet) {
-                if (handType === 'AA' || handType === 'KK') {
-                    decision = Math.random() < 0.7 ? 'raise' : 'call';
-                } else if (handType === 'QQ') {
-                    decision = Math.random() < 0.55 ? 'raise' : 'call';
-                } else if (handType.startsWith('AK')) {
-                    decision = Math.random() < 0.65 ? 'call' : 'fold';
-                } else if (handType === 'JJ') {
-                    decision = Math.random() < 0.55 ? 'call' : 'fold';
-                } else if (preflopStrength > 0.5 && preflopPotOdds < 0.28) {
-                    decision = Math.random() < 0.45 ? 'call' : 'fold';
+            // 面对加注
+            if (preflopStrength > 0.8) {
+                decision = Math.random() < 0.7 ? 'raise' : 'call';
+            } else if (preflopStrength > 0.65) {
+                decision = Math.random() < 0.5 ? 'raise' : 'call';
+            } else if (preflopStrength > 0.5) {
+                decision = Math.random() < 0.35 ? 'raise' : 'call';
+            } else if (preflopStrength > 0.4) {
+                if (preflopPotOdds < 0.35 || highBluffSuspicion) {
+                    decision = Math.random() < 0.7 ? 'call' : 'fold';
                 } else {
-                    decision = 'fold';
+                    decision = Math.random() < 0.6 ? 'call' : 'fold';
                 }
-            } else {
-                if (preflopStrength > 0.8) {
-                    decision = Math.random() < 0.75 ? 'raise' : 'call';
-                } else if (preflopStrength > 0.65) {
-                    decision = Math.random() < 0.55 ? 'raise' : 'call';
-                } else if (preflopStrength > 0.5) {
-                    if (positionAdv > 0.6) decision = Math.random() < 0.4 ? 'raise' : 'call';
-                    else decision = Math.random() < 0.3 ? 'raise' : 'call';
-                } else if (preflopStrength > 0.4) {
-                    if (preflopPotOdds < 0.35) decision = Math.random() < 0.35 ? 'raise' : 'call';
-                    else decision = Math.random() < 0.7 ? 'call' : 'fold';
-                } else if (preflopStrength > 0.3) {
-                    if (preflopPotOdds < 0.18) decision = 'call';
-                    else decision = Math.random() < 0.55 ? 'call' : 'fold';
-                } else if (positionAdv > 0.8 && preflopPotOdds < 0.15) {
-                    decision = Math.random() < 0.35 ? 'call' : 'fold';
-                } else {
-                    decision = 'fold';
+            } else if (preflopStrength > 0.3) {
+                if (preflopPotOdds < 0.2 || highBluffSuspicion) {
+                    decision = Math.random() < 0.6 ? 'call' : 'fold';
                 }
+            } else if (highBluffSuspicion && preflopPotOdds < 0.15) {
+                decision = Math.random() < 0.4 ? 'call' : 'fold';
             }
         } else {
-            if (preflopStrength > 0.55) {
-                decision = Math.random() < (style.aggression * 1.2) * (1 + positionAdv * 0.5) ? 'raise' : 'check';
-            } else if (preflopStrength > 0.4 && positionAdv > 0.65) {
-                decision = Math.random() < (style.bluffRate * 1.8) ? 'raise' : 'check';
-            } else if (preflopStrength > 0.3 && positionAdv > 0.75) {
+            // 没人加注
+            if (preflopStrength > 0.5) {
+                decision = Math.random() < style.aggression ? 'raise' : 'check';
+            } else if (preflopStrength > 0.35 && positionAdv > 0.6) {
                 decision = Math.random() < (style.bluffRate * 1.5) ? 'raise' : 'check';
-            } else if (positionAdv > 0.85) {
-                decision = Math.random() < (style.bluffRate * 1.3) ? 'raise' : 'check';
+            } else if (positionAdv > 0.8) {
+                decision = Math.random() < style.bluffRate ? 'raise' : 'check';
             } else {
                 decision = 'check';
             }
         }
         
-        // 计算加注金额
         if (decision === 'raise') {
-            if (facing3bet) {
-                raiseAmount = Math.min(gameState.currentBet * 3 + gameState.pot * 0.5, player.chips + player.bet);
-            } else {
-                const baseRaise = gameState.bigBlind * (2 + positionAdv * 2);
-                raiseAmount = Math.min(Math.floor(baseRaise * (0.8 + Math.random() * 0.4)), player.chips + player.bet);
-            }
+            const baseRaise = gameState.bigBlind * (2 + positionAdv * 2);
+            raiseAmount = Math.min(Math.floor(baseRaise * (0.8 + Math.random() * 0.4)), player.chips + player.bet);
             const minRaise = gameState.currentBet + gameState.bigBlind;
             raiseAmount = Math.max(raiseAmount, minRaise);
         }
     } else {
-        // 翻牌后策略
+        // 翻牌后策略 - 更激进
         if (detailedStrength.tier >= 4) {
+            // 超强牌
+            if (toCall === 0) {
+                decision = Math.random() < 0.7 ? 'raise' : 'check';
+            } else {
+                decision = Math.random() < 0.6 ? 'raise' : 'call';
+            }
+        } else if (detailedStrength.tier >= 3) {
+            // 强牌（两对、三条）
             if (toCall === 0) {
                 decision = Math.random() < 0.65 ? 'raise' : 'check';
             } else {
-                decision = Math.random() < 0.7 ? 'raise' : 'call';
-            }
-        } else if (detailedStrength.tier >= 3) {
-            if (toCall === 0) {
-                decision = Math.random() < 0.6 ? 'raise' : 'check';
-            } else {
-                if (potOddsDecent) decision = Math.random() < 0.4 ? 'raise' : 'call';
-                else if (potOddsForCall < 0.65) decision = Math.random() < 0.82 ? 'call' : 'fold';
-                else decision = Math.random() < 0.5 ? 'call' : 'fold';
+                // 几乎永远不弃
+                decision = Math.random() < 0.85 ? 'call' : (Math.random() < 0.5 ? 'raise' : 'call');
             }
         } else if (detailedStrength.tier >= 2) {
+            // 中等牌（一对）
             if (toCall === 0) {
                 decision = Math.random() < 0.55 ? 'raise' : 'check';
             } else {
-                if (potOddsGood) decision = Math.random() < 0.85 ? 'call' : 'fold';
-                else if (potOddsDecent) decision = Math.random() < 0.72 ? 'call' : 'fold';
-                else if (potOddsForCall < 0.65) decision = Math.random() < 0.55 ? 'call' : 'fold';
-                else decision = Math.random() < 0.4 ? 'call' : 'fold';
+                // 职业牌手一对也难弃
+                if (potOddsGood) {
+                    decision = Math.random() < 0.9 ? 'call' : 'fold';
+                } else if (potOddsDecent) {
+                    decision = Math.random() < 0.8 ? 'call' : 'fold';
+                } else if (potOddsForCall < 0.7) {
+                    decision = Math.random() < 0.7 ? 'call' : 'fold';
+                } else if (highBluffSuspicion) {
+                    // 怀疑诈唬也要抓
+                    decision = Math.random() < 0.55 ? 'call' : 'fold';
+                } else {
+                    decision = Math.random() < 0.45 ? 'call' : 'fold';
+                }
             }
-        } else if (drawStrength > 0.35) {
+        } else if (drawStrength > 0.3) {
+            // 听牌
             if (toCall === 0) {
-                decision = Math.random() < style.aggression * 0.7 ? 'raise' : 'check';
-            } else if (potOddsForCall < drawStrength * 0.9) {
+                decision = Math.random() < 0.5 ? 'raise' : 'check';
+            } else if (potOddsForCall < drawStrength) {
                 decision = 'call';
-            } else if (Math.random() < 0.32) {
-                decision = 'raise';
             } else {
                 decision = Math.random() < 0.4 ? 'call' : 'fold';
             }
-        } else if (detailedStrength.tier >= 1) {
-            if (toCall === 0) {
-                const bluffCondition = positionAdv > 0.6 && boardTexture === 'dry';
-                decision = (Math.random() < style.bluffRate * 1.2 && bluffCondition) ? 'raise' : 'check';
-            } else {
-                if (potOddsGood) decision = Math.random() < 0.4 ? 'call' : 'fold';
-                else decision = 'fold';
-            }
         } else {
+            // 弱牌
             if (toCall === 0) {
-                decision = Math.random() < style.bluffRate * 0.9 ? 'raise' : 'check';
+                // 选时机诈唬
+                if (positionAdv > 0.6 && Math.random() < style.bluffRate) {
+                    decision = 'raise';
+                } else {
+                    decision = 'check';
+                }
             } else {
-                decision = 'fold';
+                // 面对下注：看赔率和诈唬嫌疑
+                if (highBluffSuspicion && potOddsGood) {
+                    decision = Math.random() < 0.55 ? 'call' : 'fold';
+                } else if (highBluffSuspicion && potOddsDecent) {
+                    decision = Math.random() < 0.4 ? 'call' : 'fold';
+                } else if (potOddsGood) {
+                    decision = Math.random() < 0.35 ? 'call' : 'fold';
+                }
             }
         }
         
@@ -412,19 +340,15 @@ function aiDecision(player, gameState, room) {
         if (decision === 'raise') {
             const pot = gameState.pot;
             if (detailedStrength.tier >= 4) {
-                raiseAmount = Math.floor(pot * (0.66 + Math.random() * 0.34));
+                raiseAmount = Math.floor(pot * (0.7 + Math.random() * 0.3));
             } else if (detailedStrength.tier >= 3) {
-                raiseAmount = Math.floor(pot * (0.5 + Math.random() * 0.25));
-            } else if (drawStrength > 0.35) {
-                raiseAmount = Math.floor(pot * (0.5 + Math.random() * 0.17));
-            } else if (detailedStrength.tier >= 2) {
-                raiseAmount = Math.floor(pot * (0.33 + Math.random() * 0.17));
+                raiseAmount = Math.floor(pot * (0.55 + Math.random() * 0.25));
             } else {
-                raiseAmount = Math.floor(pot * (0.25 + Math.random() * 0.15));
+                raiseAmount = Math.floor(pot * (0.4 + Math.random() * 0.2));
             }
             
-            const minRaise = Math.floor(Math.max(gameState.currentBet + gameState.bigBlind, gameState.pot * 0.5));
-            raiseAmount = Math.floor(Math.max(raiseAmount, minRaise));
+            const minRaise = Math.max(gameState.currentBet + gameState.bigBlind, Math.floor(pot * 0.4));
+            raiseAmount = Math.max(raiseAmount, minRaise);
             raiseAmount = Math.min(raiseAmount, player.chips + player.bet);
         }
     }
@@ -437,25 +361,55 @@ function aiDecision(player, gameState, room) {
             decision = 'allin';
         } else if (detailedStrength.tier >= 2 && spr < 3) {
             decision = 'allin';
-        } else if (handStrength > 0.48 && callCost > 0.5) {
-            decision = 'allin';
+        } else if (handStrength > 0.45 && callCost > 0.5) {
+            decision = Math.random() < 0.6 ? 'allin' : 'fold';
+        } else if (highBluffSuspicion && detailedStrength.tier >= 2) {
+            decision = Math.random() < 0.5 ? 'allin' : 'fold';
         } else {
-            decision = Math.random() < 0.4 ? 'allin' : 'fold';
+            decision = 'fold';
         }
         
         if (decision === 'allin') {
-            return { action: 'call', amount: 0 }; // All in 等同于call所有筹码
+            return { action: 'call', amount: 0 };
         }
+    }
+    
+    // 更新玩家攻击性追踪
+    if (decision === 'fold') {
+        playerTotalActions++;
     }
     
     return { action: decision, amount: raiseAmount };
 }
 
+// 记录玩家行动（用于追踪攻击性）
+function recordPlayerAction(action) {
+    playerTotalActions++;
+    if (action === 'raise') {
+        playerRaiseCount++;
+        playerAggression = Math.min(1, playerAggression + 0.1);
+    } else if (action === 'fold') {
+        playerAggression = Math.max(0.2, playerAggression - 0.05);
+    }
+    
+    // 基于加注频率更新
+    if (playerTotalActions > 5) {
+        const raiseFreq = playerRaiseCount / playerTotalActions;
+        playerAggression = 0.3 + raiseFreq * 0.6;
+    }
+}
+
+// 重置追踪（新一局）
+function resetTracking() {
+    playerAggression = 0.3;
+    playerRaiseCount = 0;
+    playerTotalActions = 0;
+}
+
 module.exports = {
     aiDecision,
+    recordPlayerAction,
+    resetTracking,
     getAIPlayerStyle,
-    evaluateHandStrength,
-    evaluateHandStrengthDetailed,
-    getPreflopStrength,
-    getHandType
+    evaluateHandStrength
 };
