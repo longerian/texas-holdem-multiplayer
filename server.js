@@ -2,6 +2,7 @@ const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const { aiDecision } = require('./ai-engine');
 
 const app = express();
 const httpServer = createServer(app);
@@ -215,7 +216,7 @@ function checkAITurn(room) {
   setTimeout(() => aiTurn(room), 500);
 }
 
-// AI决策
+// AI决策 - 使用职业牌手引擎
 function aiTurn(room) {
   const gs = room.gameState;
   if (!gs.gameActive) return;
@@ -226,57 +227,15 @@ function aiTurn(room) {
     return;
   }
   
-  const toCall = gs.currentBet - player.bet;
-  const handStrength = evaluateHandStrength(player.hand, gs.communityCards);
+  console.log(`AI ${player.name} 思考中...`);
   
-  let decision = 'fold';
-  let raiseAmount = 0;
-  const rand = Math.random();
+  // 使用职业牌手AI引擎
+  const result = aiDecision(player, gs, room);
   
-  // 简单AI逻辑
-  if (toCall === 0) {
-    // 没人下注
-    if (handStrength > 0.5 || rand < 0.4) {
-      if (rand < 0.3 && player.chips > gs.bigBlind * 2) {
-        decision = 'raise';
-        raiseAmount = Math.min(gs.pot * 0.5 + gs.currentBet, player.chips + player.bet);
-      } else {
-        decision = 'check';
-      }
-    } else {
-      decision = 'check';
-    }
-  } else {
-    // 有人下注
-    const potOdds = toCall / (gs.pot + toCall);
-    
-    if (handStrength > 0.6) {
-      if (rand < 0.5 && player.chips > toCall * 2) {
-        decision = 'raise';
-        raiseAmount = Math.min(gs.currentBet * 2 + gs.pot * 0.5, player.chips + player.bet);
-      } else {
-        decision = 'call';
-      }
-    } else if (handStrength > 0.35 || potOdds < 0.3) {
-      decision = rand < 0.7 ? 'call' : 'fold';
-    } else if (rand < 0.2) {
-      decision = 'call'; // 偶尔诈唬
-    } else {
-      decision = 'fold';
-    }
-  }
-  
-  // 确保加注金额至少是最小加注
-  if (decision === 'raise') {
-    const minRaise = gs.currentBet + gs.bigBlind;
-    raiseAmount = Math.max(raiseAmount, minRaise);
-    raiseAmount = Math.min(raiseAmount, player.chips + player.bet);
-  }
-  
-  console.log(`AI ${player.name} decision: ${decision}, raiseAmount: ${raiseAmount}`);
+  console.log(`AI ${player.name} 决策: ${result.action}, amount: ${result.amount}`);
   
   // 执行决策
-  executeAction(room, player, decision, raiseAmount);
+  executeAction(room, player, result.action, result.amount || 0);
 }
 
 // 执行玩家行动
@@ -336,44 +295,6 @@ function executeAction(room, player, action, amount = 0) {
   
   broadcastGameState(room.code);
   nextPlayer(room);
-}
-
-// 简单牌力评估
-function evaluateHandStrength(hand, community) {
-  if (hand.length < 2) return 0.3;
-  
-  const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-  const rank1 = ranks.indexOf(hand[0].rank);
-  const rank2 = ranks.indexOf(hand[1].rank);
-  const isPair = hand[0].rank === hand[1].rank;
-  const isSuited = hand[0].suit === hand[1].suit;
-  const highCard = Math.max(rank1, rank2);
-  
-  let strength = 0.2;
-  
-  // 对子
-  if (isPair) {
-    strength = 0.5 + (rank1 / ranks.length) * 0.4;
-  } else {
-    // 高牌
-    strength = (highCard / ranks.length) * 0.3;
-    
-    // 同花
-    if (isSuited) strength += 0.1;
-    
-    // 连牌
-    if (Math.abs(rank1 - rank2) <= 2) strength += 0.1;
-    
-    // AK, AQ 等
-    if (highCard >= 11 && Math.abs(rank1 - rank2) <= 2) strength += 0.15;
-  }
-  
-  // 公共牌加成（简化版）
-  if (community.length >= 3) {
-    strength += 0.1;
-  }
-  
-  return Math.min(strength, 1);
 }
 
 // 下一个玩家
