@@ -160,8 +160,14 @@ function startGame(room) {
   
   // 发手牌
   gs.players.forEach(player => {
-    if (player && !player.folded) {
-      player.hand = [gs.deck.pop(), gs.deck.pop()];
+    if (player) {
+      // 筹码为0的玩家自动跳过
+      if (player.chips <= 0) {
+        player.folded = true;
+        player.hand = [];
+      } else {
+        player.hand = [gs.deck.pop(), gs.deck.pop()];
+      }
     }
   });
   
@@ -630,9 +636,7 @@ io.on('connection', (socket) => {
         seat.bet = 0;
         seat.hand = null;
         seat.isAllIn = false;
-        if (seat.chips <= 0) {
-          seat.chips = 1000; // 补充筹码
-        }
+        // 不再自动补充筹码，筹码为0的玩家会被跳过
         room.gameState.players[i] = seat;
       }
     });
