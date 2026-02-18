@@ -511,20 +511,84 @@
     
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io();
+        // 配置 Socket.IO 自动重连
+        const socket = io({
+            reconnection: true,
+            reconnectionAttempts: 10,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000
+        });
         let currentRoomCode = null;
         let myPlayerId = null;
         let isHost = false;
         let gameState = null;
         let roomData = null;
+        let playerName = '';
+        
+        // 显示连接状态提示
+        function showConnectionStatus(status) {
+            const msg = document.getElementById('gameMessage') || document.querySelector('.message');
+            if (msg) {
+                if (status === 'disconnected') {
+                    msg.textContent = '⚠️ 连接已断开，正在重连...';
+                    msg.style.color = '#ff6b6b';
+                } else if (status === 'reconnecting') {
+                    msg.textContent = '🔄 正在重新连接...';
+                    msg.style.color = '#ffd700';
+                } else if (status === 'connected') {
+                    msg.style.color = '';
+                }
+            }
+        }
+        
+        // Socket.IO 事件
+        socket.on('connect', () => {
+            console.log('已连接到服务器');
+            showConnectionStatus('connected');
+            // 如果之前在房间或游戏中，尝试重新加入
+            if (currentRoomCode && playerName) {
+                socket.emit('rejoinRoom', { name: playerName, roomCode: currentRoomCode });
+            }
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('与服务器断开连接');
+            showConnectionStatus('disconnected');
+        });
+        
+        socket.on('reconnecting', (attemptNumber) => {
+            console.log(`正在重连 (${attemptNumber})`);
+            showConnectionStatus('reconnecting');
+        });
+        
+        socket.on('reconnect', (attemptNumber) => {
+            console.log(`重连成功 (${attemptNumber})`);
+            showConnectionStatus('connected');
+        });
+        
+        socket.on('reconnect_failed', () => {
+            console.log('重连失败');
+            alert('连接已断开，请刷新页面重新进入');
+        });
+        
+        // 页面可见性变化时检查连接
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                console.log('页面重新可见，检查连接状态');
+                if (!socket.connected) {
+                    socket.connect();
+                }
+            }
+        });
         
         // AI名称列表
         const aiNames = ['小明', '小红', '老王', '阿强', '小美'];
         
         // 创建房间
         function createRoom() {
-            const name = document.getElementById('playerName').value.trim() || '玩家';
-            socket.emit('createRoom', { name });
+            playerName = document.getElementById('playerName').value.trim() || '玩家';
+            socket.emit('createRoom', { name: playerName });
         }
         
         function showJoinDialog() {
@@ -538,7 +602,7 @@
         }
         
         function joinRoom() {
-            const name = document.getElementById('playerName').value.trim() || '玩家';
+            playerName = document.getElementById('playerName').value.trim() || '玩家';
             const roomCode = document.getElementById('roomCodeInput').value.trim().toUpperCase();
             
             if (roomCode.length !== 4) {
@@ -546,7 +610,7 @@
                 return;
             }
             
-            socket.emit('joinRoom', { name, roomCode });
+            socket.emit('joinRoom', { name: playerName, roomCode });
         }
         
         function leaveRoom() {

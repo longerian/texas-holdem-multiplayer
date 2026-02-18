@@ -7,12 +7,16 @@ const { aiDecision, recordPlayerAction, resetTracking, evaluateHand, getBestHand
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: "*", methods: ["GET", "POST"] }
+  cors: { origin: "*", methods: ["GET", "POST"] },
+  pingTimeout: 60000,   // 60秒无响应才断开
+  pingInterval: 25000   // 每25秒发送心跳
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
 const rooms = new Map();
+// 存储断开连接的玩家信息，用于重连
+const disconnectedPlayers = new Map(); // oldSocketId -> { roomCode, seatIndex, name }
 
 function generateRoomCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -707,11 +711,63 @@ io.on('connection', (socket) => {
     startGame(room);
   });
   
+  // 重新加入房间（重连）
+  socket.on('rejoinRoom', (data) => {
+    const room = rooms.get(data.roomCode);
+    if (!room) {
+      socket.emit('error', { message: '房间不存在' });
+      return;
+    }
+    
+    // 查找是否有同名的座位（可能是之前断开的）
+    const seatIndex = room.seats.findIndex(s => s && s.name === data.name && !s.isAI);
+    
+    if (seatIndex !== -1) {
+      const seat = room.seats[seatIndex];
+      const oldId = seat.id;
+      seat.id = socket.id; // 更新为新 socket id
+      
+      // 如果是房主，更新房主 id
+      if (room.hostId === oldId) {
+        room.hostId = socket.id;
+      }
+      
+      // 如果游戏中有这个玩家，也更新 gameState 中的 id
+      if (room.gameState && room.gameState.players) {
+        const player = room.gameState.players[seatIndex];
+        if (player) {
+          player.id = socket.id;
+        }
+      }
+      
+      socket.join(data.roomCode);
+      socket.emit('roomJoined', { roomCode: data.roomCode, playerId: socket.id });
+      broadcastRoomState(data.roomCode);
+      
+      // 如果游戏正在进行，发送游戏状态
+      if (room.gameState && room.gameState.gameActive) {
+        broadcastGameState(data.roomCode);
+      }
+      
+      console.log(`玩家 ${data.name} 重新连接`);
+    }
+  });
+  
   // 断开连接
   socket.on('disconnect', () => {
     rooms.forEach((room, roomCode) => {
       const seatIndex = room.seats.findIndex(s => s && s.id === socket.id);
       if (seatIndex !== -1) {
+        const seat = room.seats[seatIndex];
+        
+        // 如果游戏正在进行，保留座位一段时间等待重连
+        if (room.gameState && room.gameState.gameActive) {
+          console.log(`玩家 ${seat.name} 断开连接，等待重连...`);
+          // 不清空座位，等待重连
+          return;
+        }
+        
+        // 游戏未开始，清空座位
         room.seats[seatIndex] = null;
         
         // 转移房主
@@ -720,9 +776,7 @@ io.on('connection', (socket) => {
           room.hostId = newHost ? newHost.id : null;
         }
         
-        if (!room.gameState.gameActive) {
-          broadcastRoomState(roomCode);
-        }
+        broadcastRoomState(roomCode);
       }
     });
   });
