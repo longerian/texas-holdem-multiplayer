@@ -72,17 +72,18 @@ function evaluateHandStrengthDetailed(hand, community) {
     return { tier, drawStrength };
 }
 
-// 评估一手牌
+// 评估一手牌（完整版，返回可用于比较的分值）
 function evaluateHand(cards) {
     if (!cards || cards.length < 5) {
         // 手牌评估
         if (cards && cards.length === 2) {
             const r1 = RANKS.indexOf(cards[0].rank);
             const r2 = RANKS.indexOf(cards[1].rank);
-            if (cards[0].rank === cards[1].rank) return { rank: 1, name: '一对' };
-            return { rank: 0, name: '高牌', highCard: Math.max(r1, r2) };
+            if (cards[0].rank === cards[1].rank) return { rank: 1, name: '一对', highCard: r1, kickers: [r1, r1] };
+            const high = Math.max(r1, r2);
+            return { rank: 0, name: '高牌', highCard: high, kickers: [high, Math.min(r1, r2)] };
         }
-        return { rank: 0, name: '高牌', highCard: 0 };
+        return { rank: 0, name: '高牌', highCard: 0, kickers: [] };
     }
     
     const rankCounts = {};
@@ -100,6 +101,13 @@ function evaluateHand(cards) {
     let isStraight = false;
     let straightHigh = 0;
     const sortedRanks = [...new Set(cards.map(c => RANKS.indexOf(c.rank)))].sort((a, b) => a - b);
+    
+    // A-2-3-4-5 特殊顺子
+    if (sortedRanks.includes(12) && sortedRanks.includes(0) && sortedRanks.includes(1) && sortedRanks.includes(2) && sortedRanks.includes(3)) {
+        isStraight = true;
+        straightHigh = 3; // 5高顺子
+    }
+    
     for (let i = 0; i <= sortedRanks.length - 5; i++) {
         if (sortedRanks[i + 4] - sortedRanks[i] === 4) {
             isStraight = true;
@@ -109,16 +117,63 @@ function evaluateHand(cards) {
     
     const counts = Object.values(rankCounts).sort((a, b) => b - a);
     
-    if (isStraight && isFlush) return { rank: 8, name: '同花顺', highCard: straightHigh };
-    if (counts[0] === 4) return { rank: 7, name: '四条', highCard: ranks[0] };
-    if (counts[0] === 3 && counts[1] === 2) return { rank: 6, name: '葫芦', highCard: ranks[0] };
-    if (isFlush) return { rank: 5, name: '同花', highCard: ranks[0] };
-    if (isStraight) return { rank: 4, name: '顺子', highCard: straightHigh };
-    if (counts[0] === 3) return { rank: 3, name: '三条', highCard: ranks[0] };
-    if (counts[0] === 2 && counts[1] === 2) return { rank: 2, name: '两对', highCard: ranks[0] };
-    if (counts[0] === 2) return { rank: 1, name: '一对', highCard: ranks[0] };
+    // 获取所有牌按出现次数和大小排序
+    const getSortedRanks = () => {
+        const arr = [];
+        for (const [rank, count] of Object.entries(rankCounts)) {
+            arr.push({ rank: RANKS.indexOf(rank), count });
+        }
+        return arr.sort((a, b) => b.count - a.count || b.rank - a.rank).map(x => x.rank);
+    };
+    const sortedByCount = getSortedRanks();
     
-    return { rank: 0, name: '高牌', highCard: ranks[0] };
+    if (isStraight && isFlush) return { rank: 8, name: '同花顺', highCard: straightHigh, kickers: [straightHigh] };
+    if (counts[0] === 4) return { rank: 7, name: '四条', highCard: sortedByCount[0], kickers: sortedByCount };
+    if (counts[0] === 3 && counts[1] >= 2) return { rank: 6, name: '葫芦', highCard: sortedByCount[0], kickers: sortedByCount.slice(0, 2) };
+    if (isFlush) {
+        const flushCards = cards.filter(c => suitCounts[c.suit] >= 5).map(c => RANKS.indexOf(c.rank)).sort((a, b) => b - a).slice(0, 5);
+        return { rank: 5, name: '同花', highCard: flushCards[0], kickers: flushCards };
+    }
+    if (isStraight) return { rank: 4, name: '顺子', highCard: straightHigh, kickers: [straightHigh] };
+    if (counts[0] === 3) return { rank: 3, name: '三条', highCard: sortedByCount[0], kickers: sortedByCount.slice(0, 3) };
+    if (counts[0] === 2 && counts[1] === 2) return { rank: 2, name: '两对', highCard: sortedByCount[0], kickers: sortedByCount.slice(0, 3) };
+    if (counts[0] === 2) return { rank: 1, name: '一对', highCard: sortedByCount[0], kickers: sortedByCount.slice(0, 4) };
+    
+    return { rank: 0, name: '高牌', highCard: ranks[0], kickers: ranks.slice(0, 5) };
+}
+
+// 比较两手牌，返回胜者（1表示hand1胜，-1表示hand2胜，0平局）
+function compareHands(hand1, community, hand2) {
+    const eval1 = evaluateHand([...hand1, ...community]);
+    const eval2 = evaluateHand([...hand2, ...community]);
+    
+    if (eval1.rank !== eval2.rank) {
+        return eval1.rank > eval2.rank ? 1 : -1;
+    }
+    
+    // 同牌型比较 kickers
+    for (let i = 0; i < Math.max(eval1.kickers.length, eval2.kickers.length); i++) {
+        const k1 = eval1.kickers[i] || 0;
+        const k2 = eval2.kickers[i] || 0;
+        if (k1 !== k2) return k1 > k2 ? 1 : -1;
+    }
+    
+    return 0;
+}
+
+// 获取最佳牌型描述
+function getBestHandDescription(hand, community) {
+    const allCards = [...hand, ...community];
+    if (allCards.length < 5) {
+        // 只有手牌
+        if (hand && hand.length === 2) {
+            if (hand[0].rank === hand[1].rank) return '一对';
+            return '高牌';
+        }
+        return '高牌';
+    }
+    const result = evaluateHand(allCards);
+    return result.name;
 }
 
 // 听牌评估
@@ -411,5 +466,8 @@ module.exports = {
     recordPlayerAction,
     resetTracking,
     getAIPlayerStyle,
-    evaluateHandStrength
+    evaluateHandStrength,
+    evaluateHand,
+    compareHands,
+    getBestHandDescription
 };

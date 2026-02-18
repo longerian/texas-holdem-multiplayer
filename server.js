@@ -2,7 +2,7 @@ const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-const { aiDecision, recordPlayerAction, resetTracking } = require('./ai-engine');
+const { aiDecision, recordPlayerAction, resetTracking, evaluateHand, getBestHandDescription } = require('./ai-engine');
 
 const app = express();
 const httpServer = createServer(app);
@@ -407,14 +407,53 @@ function showdown(room) {
   
   const activePlayers = gs.players.filter(p => p && !p.folded);
   
-  // 简化版：随机赢家（后续可加入牌力比较）
-  const winner = activePlayers[Math.floor(Math.random() * activePlayers.length)];
+  // 真正的牌力比较
+  let winner = null;
+  let winnerEval = null;
+  
+  activePlayers.forEach(p => {
+    const evalResult = evaluateHand([...p.hand, ...gs.communityCards]);
+    console.log(`${p.name}: ${evalResult.name} (rank: ${evalResult.rank}, kickers: ${evalResult.kickers})`);
+    
+    if (!winner) {
+      winner = p;
+      winnerEval = evalResult;
+    } else {
+      // 比较牌力
+      if (evalResult.rank > winnerEval.rank) {
+        winner = p;
+        winnerEval = evalResult;
+      } else if (evalResult.rank === winnerEval.rank) {
+        // 同牌型比较 kickers
+        for (let i = 0; i < Math.max(evalResult.kickers.length, winnerEval.kickers.length); i++) {
+          const k1 = evalResult.kickers[i] || 0;
+          const k2 = winnerEval.kickers[i] || 0;
+          if (k1 > k2) {
+            winner = p;
+            winnerEval = evalResult;
+            break;
+          } else if (k1 < k2) {
+            break;
+          }
+        }
+      }
+    }
+  });
+  
   winner.chips += gs.pot;
   
-  // 保存获胜者信息
-  gs.winner = { name: winner.name, chips: winner.chips, pot: gs.pot };
+  // 保存获胜者信息（包含牌型）
+  const winnerHandType = winnerEval ? winnerEval.name : '高牌';
+  gs.winner = { name: winner.name, chips: winner.chips, pot: gs.pot, handType: winnerHandType };
   
-  console.log(`showdown: ${winner.name} 获胜，赢得 ${gs.pot} 筹码`);
+  // 为所有玩家添加牌型信息
+  gs.players.forEach(p => {
+    if (p && p.hand) {
+      p.handType = getBestHandDescription(p.hand, gs.communityCards);
+    }
+  });
+  
+  console.log(`showdown: ${winner.name} 以 ${winnerHandType} 获胜，赢得 ${gs.pot} 筹码`);
   
   // 更新房间中玩家的筹码
   gs.players.forEach((p, i) => {
@@ -436,10 +475,20 @@ function endRound(room, winner) {
   gs.gameActive = false; // 立即设为不活跃，防止AI继续行动
   winner.chips += gs.pot;
   
-  // 保存获胜者信息
-  gs.winner = { name: winner.name, chips: winner.chips, pot: gs.pot };
+  // 获取获胜者牌型
+  const winnerHandType = winner.hand ? getBestHandDescription(winner.hand, gs.communityCards) : '高牌';
   
-  console.log(`endRound: ${winner.name} 获胜，赢得 ${gs.pot} 筹码`);
+  // 保存获胜者信息
+  gs.winner = { name: winner.name, chips: winner.chips, pot: gs.pot, handType: winnerHandType };
+  
+  // 为所有玩家添加牌型信息
+  gs.players.forEach(p => {
+    if (p && p.hand) {
+      p.handType = getBestHandDescription(p.hand, gs.communityCards);
+    }
+  });
+  
+  console.log(`endRound: ${winner.name} 以 ${winnerHandType} 获胜，赢得 ${gs.pot} 筹码`);
   
   // 更新房间中玩家的筹码
   gs.players.forEach((p, i) => {
