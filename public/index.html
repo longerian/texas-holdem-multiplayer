@@ -860,9 +860,14 @@
                 // 游戏结束，显示获胜信息 + 下一局和返回房间按钮
                 let winnerHtml = '';
                 if (gameState && gameState.winner && gameState.winner.name) {
-                    const isMe = gameState.players && gameState.players.find(p => p && p.id === myPlayerId && p.name === gameState.winner.name);
                     const handType = gameState.winner.handType ? ` (${gameState.winner.handType})` : '';
-                    winnerHtml = `<div style="font-size:1.3em;color:#ffd700;margin-bottom:15px;">${isMe ? '🎉 你获胜了！' : `🎉 ${gameState.winner.name} 获胜！`}${handType}<br/>赢得 ${gameState.winner.pot} 筹码！</div>`;
+                    if (gameState.winner.isTie) {
+                        // 平局
+                        winnerHtml = `<div style="font-size:1.3em;color:#ffd700;margin-bottom:15px;">🤝 平局！${gameState.winner.name}${handType}<br/>各赢得 ${gameState.winner.pot} 筹码！</div>`;
+                    } else {
+                        const isMe = gameState.players && gameState.players.find(p => p && p.id === myPlayerId && p.name === gameState.winner.name);
+                        winnerHtml = `<div style="font-size:1.3em;color:#ffd700;margin-bottom:15px;">${isMe ? '🎉 你获胜了！' : `🎉 ${gameState.winner.name} 获胜！`}${handType}<br/>赢得 ${gameState.winner.pot} 筹码！</div>`;
+                    }
                 }
                 
                 controls.innerHTML = `

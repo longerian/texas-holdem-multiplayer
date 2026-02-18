@@ -493,44 +493,47 @@ function showdown(room) {
   
   const activePlayers = gs.players.filter(p => p && !p.folded);
   
-  // 真正的牌力比较
-  let winner = null;
-  let winnerEval = null;
-  
-  activePlayers.forEach(p => {
+  // 评估所有玩家的牌力
+  const playerEvals = activePlayers.map(p => {
     const evalResult = evaluateHand([...p.hand, ...gs.communityCards]);
     console.log(`${p.name}: ${evalResult.name} (rank: ${evalResult.rank}, kickers: ${evalResult.kickers})`);
-    
-    if (!winner) {
-      winner = p;
-      winnerEval = evalResult;
-    } else {
-      // 比较牌力
-      if (evalResult.rank > winnerEval.rank) {
-        winner = p;
-        winnerEval = evalResult;
-      } else if (evalResult.rank === winnerEval.rank) {
-        // 同牌型比较 kickers
-        for (let i = 0; i < Math.max(evalResult.kickers.length, winnerEval.kickers.length); i++) {
-          const k1 = evalResult.kickers[i] || 0;
-          const k2 = winnerEval.kickers[i] || 0;
-          if (k1 > k2) {
-            winner = p;
-            winnerEval = evalResult;
-            break;
-          } else if (k1 < k2) {
-            break;
-          }
-        }
-      }
-    }
+    return { player: p, eval: evalResult };
   });
   
-  winner.chips += gs.pot;
+  // 排序：按牌力从高到低
+  playerEvals.sort((a, b) => {
+    if (a.eval.rank !== b.eval.rank) {
+      return b.eval.rank - a.eval.rank;
+    }
+    // 同牌型比较 kickers
+    for (let i = 0; i < Math.max(a.eval.kickers.length, b.eval.kickers.length); i++) {
+      const k1 = a.eval.kickers[i] || 0;
+      const k2 = b.eval.kickers[i] || 0;
+      if (k1 !== k2) return k2 - k1;
+    }
+    return 0; // 完全相等
+  });
   
-  // 保存获胜者信息（包含牌型）
-  const winnerHandType = winnerEval ? winnerEval.name : '高牌';
-  gs.winner = { name: winner.name, chips: winner.chips, pot: gs.pot, handType: winnerHandType };
+  // 找出所有牌力相同的第一名玩家（可能平局）
+  const topEval = playerEvals[0].eval;
+  const winners = playerEvals.filter(pe => {
+    if (pe.eval.rank !== topEval.rank) return false;
+    for (let i = 0; i < Math.max(pe.eval.kickers.length, topEval.kickers.length); i++) {
+      const k1 = pe.eval.kickers[i] || 0;
+      const k2 = topEval.kickers[i] || 0;
+      if (k1 !== k2) return false;
+    }
+    return true;
+  }).map(pe => pe.player);
+  
+  // 平分底池
+  const winAmount = Math.floor(gs.pot / winners.length);
+  const remainder = gs.pot % winners.length;
+  
+  winners.forEach((w, i) => {
+    // 第一个赢家多拿余数
+    w.chips += winAmount + (i === 0 ? remainder : 0);
+  });
   
   // 为所有玩家添加牌型信息
   gs.players.forEach(p => {
@@ -539,7 +542,16 @@ function showdown(room) {
     }
   });
   
-  console.log(`showdown: ${winner.name} 以 ${winnerHandType} 获胜，赢得 ${gs.pot} 筹码`);
+  // 保存获胜者信息
+  const winnerHandType = topEval.name;
+  if (winners.length === 1) {
+    gs.winner = { name: winners[0].name, chips: winners[0].chips, pot: gs.pot, handType: winnerHandType };
+    console.log(`showdown: ${winners[0].name} 以 ${winnerHandType} 获胜，赢得 ${gs.pot} 筹码`);
+  } else {
+    const names = winners.map(w => w.name).join('、');
+    gs.winner = { name: names, chips: winners[0].chips, pot: winAmount, handType: winnerHandType, isTie: true };
+    console.log(`showdown: ${names} 平分底池，各赢 ${winAmount} 筹码`);
+  }
   
   // 更新房间中玩家的筹码
   gs.players.forEach((p, i) => {
