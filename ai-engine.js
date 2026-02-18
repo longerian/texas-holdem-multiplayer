@@ -75,15 +75,18 @@ function evaluateHandStrengthDetailed(hand, community) {
 // 评估一手牌（完整版，返回可用于比较的分值）
 function evaluateHand(cards) {
     if (!cards || cards.length < 5) {
-        // 手牌评估
+        // 手牌评估（只有2张）
         if (cards && cards.length === 2) {
             const r1 = RANKS.indexOf(cards[0].rank);
             const r2 = RANKS.indexOf(cards[1].rank);
-            if (cards[0].rank === cards[1].rank) return { rank: 1, name: '一对', highCard: r1, kickers: [r1, r1] };
+            if (cards[0].rank === cards[1].rank) {
+                return { rank: 1, name: '一对', kickers: [r1, r1, -1, -1, -1] }; // 对子 + 无踢脚牌
+            }
             const high = Math.max(r1, r2);
-            return { rank: 0, name: '高牌', highCard: high, kickers: [high, Math.min(r1, r2)] };
+            const low = Math.min(r1, r2);
+            return { rank: 0, name: '高牌', kickers: [high, low, -1, -1, -1] };
         }
-        return { rank: 0, name: '高牌', highCard: 0, kickers: [] };
+        return { rank: 0, name: '高牌', kickers: [0, -1, -1, -1, -1] };
     }
     
     const rankCounts = {};
@@ -117,29 +120,95 @@ function evaluateHand(cards) {
     
     const counts = Object.values(rankCounts).sort((a, b) => b - a);
     
-    // 获取所有牌按出现次数和大小排序
-    const getSortedRanks = () => {
-        const arr = [];
-        for (const [rank, count] of Object.entries(rankCounts)) {
-            arr.push({ rank: RANKS.indexOf(rank), count });
+    // 获取对子/三条/四条的牌面值
+    const getPairRank = (count) => {
+        for (const [rank, c] of Object.entries(rankCounts)) {
+            if (c === count) return RANKS.indexOf(rank);
         }
-        return arr.sort((a, b) => b.count - a.count || b.rank - a.rank).map(x => x.rank);
+        return -1;
     };
-    const sortedByCount = getSortedRanks();
     
-    if (isStraight && isFlush) return { rank: 8, name: '同花顺', highCard: straightHigh, kickers: [straightHigh] };
-    if (counts[0] === 4) return { rank: 7, name: '四条', highCard: sortedByCount[0], kickers: sortedByCount };
-    if (counts[0] === 3 && counts[1] >= 2) return { rank: 6, name: '葫芦', highCard: sortedByCount[0], kickers: sortedByCount.slice(0, 2) };
+    // 获取踢脚牌（单牌，按从大到小排序）
+    const getKickers = (excludeRanks = []) => {
+        return ranks.filter(r => !excludeRanks.includes(r)).slice(0, 5);
+    };
+    
+    // 同花：获取5张最大的同花牌
     if (isFlush) {
-        const flushCards = cards.filter(c => suitCounts[c.suit] >= 5).map(c => RANKS.indexOf(c.rank)).sort((a, b) => b - a).slice(0, 5);
-        return { rank: 5, name: '同花', highCard: flushCards[0], kickers: flushCards };
+        const flushSuit = Object.entries(suitCounts).find(([s, c]) => c >= 5)[0];
+        const flushCards = cards.filter(c => c.suit === flushSuit)
+            .map(c => RANKS.indexOf(c.rank))
+            .sort((a, b) => b - a)
+            .slice(0, 5);
+        if (isStraight) {
+            return { rank: 8, name: '同花顺', kickers: [straightHigh, -1, -1, -1, -1] };
+        }
+        return { rank: 5, name: '同花', kickers: [...flushCards, -1, -1, -1, -1].slice(0, 5) };
     }
-    if (isStraight) return { rank: 4, name: '顺子', highCard: straightHigh, kickers: [straightHigh] };
-    if (counts[0] === 3) return { rank: 3, name: '三条', highCard: sortedByCount[0], kickers: sortedByCount.slice(0, 3) };
-    if (counts[0] === 2 && counts[1] === 2) return { rank: 2, name: '两对', highCard: sortedByCount[0], kickers: sortedByCount.slice(0, 3) };
-    if (counts[0] === 2) return { rank: 1, name: '一对', highCard: sortedByCount[0], kickers: sortedByCount.slice(0, 4) };
     
-    return { rank: 0, name: '高牌', highCard: ranks[0], kickers: ranks.slice(0, 5) };
+    if (isStraight) {
+        return { rank: 4, name: '顺子', kickers: [straightHigh, -1, -1, -1, -1] };
+    }
+    
+    // 四条
+    if (counts[0] === 4) {
+        const quadRank = getPairRank(4);
+        const kicker = getKickers([quadRank])[0];
+        return { rank: 7, name: '四条', kickers: [quadRank, kicker, -1, -1, -1] };
+    }
+    
+    // 葫芦
+    if (counts[0] === 3 && counts[1] >= 2) {
+        let tripsRank = -1;
+        let pairRank = -1;
+        const sortedByCount = Object.entries(rankCounts)
+            .map(([r, c]) => ({ rank: RANKS.indexOf(r), count: c }))
+            .sort((a, b) => b.count - a.count || b.rank - a.rank);
+        
+        for (const item of sortedByCount) {
+            if (item.count >= 3 && tripsRank === -1) tripsRank = item.rank;
+            else if (item.count >= 2 && pairRank === -1 && item.rank !== tripsRank) pairRank = item.rank;
+        }
+        
+        // 如果没有单独的对子，用另一个三条作为对子
+        if (pairRank === -1) {
+            for (const item of sortedByCount) {
+                if (item.count >= 2 && item.rank !== tripsRank) {
+                    pairRank = item.rank;
+                    break;
+                }
+            }
+        }
+        
+        return { rank: 6, name: '葫芦', kickers: [tripsRank, pairRank, -1, -1, -1] };
+    }
+    
+    // 三条
+    if (counts[0] === 3) {
+        const tripsRank = getPairRank(3);
+        const kickers = getKickers([tripsRank]).slice(0, 2);
+        return { rank: 3, name: '三条', kickers: [tripsRank, ...kickers, -1, -1, -1].slice(0, 5) };
+    }
+    
+    // 两对
+    if (counts[0] === 2 && counts[1] === 2) {
+        const pairs = Object.entries(rankCounts)
+            .filter(([r, c]) => c === 2)
+            .map(([r, c]) => RANKS.indexOf(r))
+            .sort((a, b) => b - a);
+        const kicker = getKickers(pairs)[0];
+        return { rank: 2, name: '两对', kickers: [pairs[0], pairs[1], kicker, -1, -1] };
+    }
+    
+    // 一对
+    if (counts[0] === 2) {
+        const pairRank = getPairRank(2);
+        const kickers = getKickers([pairRank]).slice(0, 3);
+        return { rank: 1, name: '一对', kickers: [pairRank, ...kickers, -1, -1].slice(0, 4) };
+    }
+    
+    // 高牌
+    return { rank: 0, name: '高牌', kickers: [...ranks.slice(0, 5), -1, -1, -1, -1].slice(0, 5) };
 }
 
 // 比较两手牌，返回胜者（1表示hand1胜，-1表示hand2胜，0平局）
