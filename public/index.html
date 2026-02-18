@@ -712,7 +712,7 @@
                 if (p.folded) {
                     betText = '已弃牌';
                 } else if (p.isAllIn) {
-                    betText = 'All In!';
+                    betText = '全押';
                 } else if (p.bet === 0) {
                     betText = '过牌';
                 } else {
@@ -809,7 +809,7 @@
             
             if (toCall > 0) {
                 if (toCall >= me.chips) {
-                    html += `<button class="btn call-btn" onclick="playerAction('call')">All in (${me.chips})</button>`;
+                    html += `<button class="btn call-btn" onclick="playerAction('call')">全押 (${me.chips})</button>`;
                 } else {
                     html += `<button class="btn call-btn" onclick="playerAction('call')">跟注 ${toCall}</button>`;
                 }
