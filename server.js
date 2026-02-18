@@ -18,6 +18,51 @@ const rooms = new Map();
 // 存储断开连接的玩家信息，用于重连
 const disconnectedPlayers = new Map(); // oldSocketId -> { roomCode, seatIndex, name }
 
+// 房间空闲超时时间（毫秒）- 30分钟
+const ROOM_IDLE_TIMEOUT = 30 * 60 * 1000;
+
+// 更新房间活动时间
+function touchRoom(roomCode) {
+  const room = rooms.get(roomCode);
+  if (room) {
+    room.lastActivity = Date.now();
+  }
+}
+
+// 定期清理空闲房间
+function cleanupIdleRooms() {
+  const now = Date.now();
+  let cleanedCount = 0;
+  
+  rooms.forEach((room, roomCode) => {
+    // 游戏进行中不清理
+    if (room.gameState && room.gameState.gameActive) return;
+    
+    // 空房间立即清理
+    const occupiedSeats = room.seats.filter(s => s !== null);
+    if (occupiedSeats.length === 0) {
+      rooms.delete(roomCode);
+      cleanedCount++;
+      console.log(`清理空房间: ${roomCode}`);
+      return;
+    }
+    
+    // 空闲超时清理
+    if (room.lastActivity && (now - room.lastActivity > ROOM_IDLE_TIMEOUT)) {
+      rooms.delete(roomCode);
+      cleanedCount++;
+      console.log(`清理空闲房间: ${roomCode} (空闲 ${Math.round((now - room.lastActivity) / 60000)} 分钟)`);
+    }
+  });
+  
+  if (cleanedCount > 0) {
+    console.log(`房间清理完成，当前房间数: ${rooms.size}`);
+  }
+}
+
+// 每5分钟检查一次空闲房间
+setInterval(cleanupIdleRooms, 5 * 60 * 1000);
+
 function generateRoomCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';
@@ -57,6 +102,7 @@ function createRoom() {
     code: generateRoomCode(),
     seats: [null, null, null, null, null, null], // 6个座位
     hostId: null,
+    lastActivity: Date.now(), // 最后活动时间
     gameState: {
       deck: [],
       communityCards: [],
@@ -89,6 +135,7 @@ function getRoomInfo(room) {
 function broadcastRoomState(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return;
+  touchRoom(roomCode); // 更新活动时间
   io.to(roomCode).emit('roomUpdate', getRoomInfo(room));
 }
 
@@ -96,6 +143,7 @@ function broadcastRoomState(roomCode) {
 function broadcastGameState(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return;
+  touchRoom(roomCode); // 更新活动时间
   
   const gs = room.gameState;
   const isGameOver = gs.phase === 'showdown' || gs.phase === 'finished';
