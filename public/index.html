@@ -654,7 +654,12 @@
         socket.on('roomJoined', (data) => {
             currentRoomCode = data.roomCode;
             myPlayerId = data.playerId;
-            showRoom();
+            // 如果游戏正在进行，直接切换到游戏界面
+            if (data.gameActive) {
+                showGame();
+            } else {
+                showRoom();
+            }
         });
         
         socket.on('roomUpdate', (data) => {
@@ -664,6 +669,10 @@
         
         socket.on('gameState', (data) => {
             gameState = data;
+            // 如果游戏正在进行且不在游戏界面，切换过去
+            if (gameState.gameActive) {
+                showGame();
+            }
             updateGameUI();
         });
         
@@ -674,7 +683,15 @@
         function showRoom() {
             document.getElementById('lobby').classList.add('hidden');
             document.getElementById('room').classList.remove('hidden');
+            document.getElementById('game').classList.add('hidden');
             document.getElementById('displayRoomCode').textContent = currentRoomCode;
+        }
+        
+        function showGame() {
+            document.getElementById('lobby').classList.add('hidden');
+            document.getElementById('room').classList.add('hidden');
+            document.getElementById('game').classList.remove('hidden');
+            document.getElementById('game').classList.add('active');
         }
         
         function updateRoomUI(data) {

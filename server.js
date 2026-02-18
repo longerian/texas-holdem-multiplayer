@@ -747,7 +747,11 @@ io.on('connection', (socket) => {
       }
       
       socket.join(data.roomCode);
-      socket.emit('roomJoined', { roomCode: data.roomCode, playerId: socket.id });
+      socket.emit('roomJoined', { 
+        roomCode: data.roomCode, 
+        playerId: socket.id,
+        gameActive: room.gameState && room.gameState.gameActive
+      });
       broadcastRoomState(data.roomCode);
       
       // 如果游戏正在进行，发送游戏状态
