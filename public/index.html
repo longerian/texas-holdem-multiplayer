@@ -690,11 +690,12 @@
                     const seatClass = isMySeat ? 'your-seat' : (player.isAI ? 'ai-seat' : 'occupied');
                     const typeLabel = player.isAI ? '🤖 电脑' : '👤 玩家';
                     const statusText = player.ready ? '✅ 已准备' : '⏳ 未准备';
+                    const connStatus = player.isAI ? '' : (player.connected ? '<span style="color:#4CAF50;">● 在线</span>' : '<span style="color:#f44336;">● 断线</span>');
                     
                     html += `
                         <div class="seat ${seatClass}">
                             <div class="player-name">${player.name}${isMySeat ? ' (你)' : ''}</div>
-                            <div class="player-type">${typeLabel}</div>
+                            <div class="player-type">${typeLabel} ${connStatus}</div>
                             <div class="player-chips">💰 ${player.chips}</div>
                             <div class="player-status">${statusText}</div>
                             ${player.isAI && isHost ? `<div class="seat-actions"><button class="btn btn-small btn-danger" onclick="removeAI(${i})">移除</button></div>` : ''}
@@ -791,9 +792,12 @@
                     handTypeHtml = `<div style="font-size:0.8em;color:#4CAF50;font-weight:bold;">${myHandType}</div>`;
                 }
                 
+                // 连接状态
+                const connStatus = p.isAI ? '' : (p.connected ? '<span style="color:#4CAF70;">●</span>' : '<span style="color:#f44336;">●断线</span>');
+                
                 return `
                     <div class="game-player ${isCurrent ? 'current' : ''} ${p.folded ? 'folded' : ''} ${p.isAI ? 'is-ai' : ''}">
-                        <div style="font-weight:bold;">${p.name}${isMe ? ' (你)' : ''}${p.isAI ? ' 🤖' : ''}</div>
+                        <div style="font-weight:bold;">${connStatus} ${p.name}${isMe ? ' (你)' : ''}${p.isAI ? ' 🤖' : ''}</div>
                         <div style="font-size:0.8em;color:#ffd700;">💰 ${p.chips}</div>
                         <div class="cards">${showCards ? cardsHtml : '<div class="card hidden">?</div><div class="card hidden">?</div>'}</div>
                         ${handTypeHtml}

@@ -114,12 +114,13 @@ function broadcastGameState(roomCode) {
           : null;
         
         if (p.id === seat.id || isGameOver) {
-          return { ...p, handType };
+          return { ...p, handType, connected: room.seats[i]?.connected ?? true };
         }
         return {
           ...p,
           handType: null,
-          hand: p.hand && p.hand.length > 0 ? [{ hidden: true }, { hidden: true }] : []
+          hand: p.hand && p.hand.length > 0 ? [{ hidden: true }, { hidden: true }] : [],
+          connected: room.seats[i]?.connected ?? true
         };
       })
     };
@@ -544,7 +545,8 @@ io.on('connection', (socket) => {
       name: data.name || '玩家1',
       chips: 1000,
       ready: false,
-      isHost: true
+      isHost: true,
+      connected: true
     };
     room.hostId = socket.id;
     
@@ -579,7 +581,8 @@ io.on('connection', (socket) => {
       id: socket.id,
       name: data.name || `玩家${emptyIndex + 1}`,
       chips: 1000,
-      ready: false
+      ready: false,
+      connected: true
     };
     
     socket.emit('roomJoined', { roomCode: data.roomCode, playerId: socket.id });
@@ -605,7 +608,8 @@ io.on('connection', (socket) => {
         name,
         chips: 1000,
         ready: false,
-        isHost: room.hostId === socket.id
+        isHost: room.hostId === socket.id,
+        connected: true
       };
     }
     
@@ -625,7 +629,8 @@ io.on('connection', (socket) => {
         name: aiNames[aiIndex % aiNames.length] || `AI${data.seatIndex + 1}`,
         chips: 1000,
         ready: true, // AI默认准备
-        isAI: true
+        isAI: true,
+        connected: true // AI始终在线
       };
     }
     
@@ -726,6 +731,7 @@ io.on('connection', (socket) => {
       const seat = room.seats[seatIndex];
       const oldId = seat.id;
       seat.id = socket.id; // 更新为新 socket id
+      seat.connected = true; // 恢复在线状态
       
       // 如果是房主，更新房主 id
       if (room.hostId === oldId) {
@@ -763,6 +769,8 @@ io.on('connection', (socket) => {
         // 如果游戏正在进行，保留座位一段时间等待重连
         if (room.gameState && room.gameState.gameActive) {
           console.log(`玩家 ${seat.name} 断开连接，等待重连...`);
+          seat.connected = false; // 标记为断线
+          broadcastRoomState(roomCode);
           // 不清空座位，等待重连
           return;
         }
