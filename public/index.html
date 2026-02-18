@@ -789,16 +789,16 @@
                 // 游戏结束时亮牌（包括弃牌玩家）
                 const showCards = isMe || isGameOver;
                 
-                // 下注显示：过牌时显示"过牌"，有下注显示金额
+                // 下注显示：有下注显示金额，0才显示过牌
                 let betText = '';
                 if (p.folded) {
                     betText = '已弃牌';
                 } else if (p.isAllIn) {
                     betText = 'All In!';
-                } else if (p.bet === 0) {
-                    betText = '过牌';
-                } else {
+                } else if (p.bet > 0) {
                     betText = `下注: ${p.bet}`;
+                } else {
+                    betText = '过牌';
                 }
                 
                 // 牌型显示：游戏中只显示自己的，结束时显示所有人的
@@ -861,7 +861,11 @@
                 let winnerHtml = '';
                 if (gameState && gameState.winner && gameState.winner.name) {
                     const handType = gameState.winner.handType ? ` (${gameState.winner.handType})` : '';
-                    if (gameState.winner.isTie) {
+                    
+                    if (gameState.winner.isGameWinner) {
+                        // 最终获胜者
+                        winnerHtml = `<div style="font-size:1.5em;color:#ffd700;margin-bottom:15px;">${gameState.winner.message || '🏆 恭喜获胜！'}<br/>最终赢家！</div>`;
+                    } else if (gameState.winner.isTie) {
                         // 平局
                         winnerHtml = `<div style="font-size:1.3em;color:#ffd700;margin-bottom:15px;">🤝 平局！${gameState.winner.name}${handType}<br/>各赢得 ${gameState.winner.pot} 筹码！</div>`;
                     } else {
@@ -874,7 +878,7 @@
                     <div class="controls-row" style="flex-direction:column;align-items:center;">
                         ${winnerHtml}
                         <div>
-                            <button class="btn btn-primary" onclick="startNextGame()" style="background:#4CAF50;margin-right:10px;">下一局</button>
+                            ${!gameState.winner?.isGameWinner ? '<button class="btn btn-primary" onclick="startNextGame()" style="background:#4CAF50;margin-right:10px;">下一局</button>' : ''}
                             <button class="btn" onclick="backToRoom()">返回房间</button>
                         </div>
                     </div>

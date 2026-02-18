@@ -595,6 +595,22 @@ function endRound(room, winner) {
     }
   });
   
+  // 检查是否只剩一人有筹码（游戏结束）
+  const playersWithChips = room.seats.filter(s => s && s.chips > 0 && !s.isAI);
+  const aiWithChips = room.seats.filter(s => s && s.chips > 0 && s.isAI);
+  
+  if (playersWithChips.length === 1 && aiWithChips.length === 0) {
+    // 只剩一个真人玩家有筹码，恭喜获胜
+    gs.winner.isGameWinner = true;
+    gs.winner.message = `🏆 恭喜 ${gs.winner.name} 获得最终胜利！`;
+    console.log(`游戏结束！${gs.winner.name} 赢得所有筹码！`);
+  } else if (playersWithChips.length === 0 && aiWithChips.length > 0) {
+    // 所有真人都输了
+    gs.winner.isGameWinner = true;
+    gs.winner.message = `游戏结束，AI 获胜！`;
+    console.log('游戏结束！AI 赢得所有筹码！');
+  }
+  
   // 直接广播最终状态，保持在这个画面直到下一局
   gs.phase = 'finished';
   broadcastGameState(room.code);
