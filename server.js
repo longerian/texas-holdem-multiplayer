@@ -47,7 +47,12 @@ function cleanupIdleRooms() {
       return;
     }
     
-    // 没有真人玩家的房间（全是AI），空闲10分钟后清理
+    // 游戏进行中不清理（AI会自动更新活动时间）
+    if (room.gameState && room.gameState.gameActive) {
+      return;
+    }
+    
+    // 没有真人玩家的房间（全是AI），游戏结束后空闲10分钟清理
     if (!hasHumanPlayer && room.lastActivity && (now - room.lastActivity > 10 * 60 * 1000)) {
       rooms.delete(roomCode);
       cleanedCount++;
@@ -55,7 +60,7 @@ function cleanupIdleRooms() {
       return;
     }
     
-    // 有真人玩家的房间，空闲30分钟后清理
+    // 有真人玩家的房间，游戏结束后空闲30分钟清理
     if (room.lastActivity && (now - room.lastActivity > ROOM_IDLE_TIMEOUT)) {
       rooms.delete(roomCode);
       cleanedCount++;
