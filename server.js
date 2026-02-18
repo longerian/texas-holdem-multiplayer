@@ -93,6 +93,7 @@ function broadcastGameState(roomCode) {
   if (!room) return;
   
   const gs = room.gameState;
+  const isGameOver = gs.phase === 'showdown' || gs.phase === 'finished';
   
   room.seats.forEach((seat, index) => {
     if (!seat) return;
@@ -101,12 +102,12 @@ function broadcastGameState(roomCode) {
       ...gs,
       players: gs.players.map((p, i) => {
         if (!p) return null;
-        if (p.id === seat.id || gs.phase === 'showdown') {
+        if (p.id === seat.id || isGameOver) {
           return p;
         }
         return {
           ...p,
-          hand: p.hand.length > 0 ? [{ hidden: true }, { hidden: true }] : []
+          hand: p.hand && p.hand.length > 0 ? [{ hidden: true }, { hidden: true }] : []
         };
       })
     };
