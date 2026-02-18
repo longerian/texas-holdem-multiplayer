@@ -35,10 +35,10 @@ function cleanupIdleRooms() {
   let cleanedCount = 0;
   
   rooms.forEach((room, roomCode) => {
-    // 游戏进行中不清理
-    if (room.gameState && room.gameState.gameActive) return;
+    // 检查是否有真人玩家（包括断线的）
+    const hasHumanPlayer = room.seats.some(s => s && !s.isAI);
     
-    // 空房间立即清理
+    // 空房间（没人）立即清理
     const occupiedSeats = room.seats.filter(s => s !== null);
     if (occupiedSeats.length === 0) {
       rooms.delete(roomCode);
@@ -47,7 +47,15 @@ function cleanupIdleRooms() {
       return;
     }
     
-    // 空闲超时清理
+    // 没有真人玩家的房间（全是AI），空闲10分钟后清理
+    if (!hasHumanPlayer && room.lastActivity && (now - room.lastActivity > 10 * 60 * 1000)) {
+      rooms.delete(roomCode);
+      cleanedCount++;
+      console.log(`清理无真人房间: ${roomCode} (空闲 ${Math.round((now - room.lastActivity) / 60000)} 分钟)`);
+      return;
+    }
+    
+    // 有真人玩家的房间，空闲30分钟后清理
     if (room.lastActivity && (now - room.lastActivity > ROOM_IDLE_TIMEOUT)) {
       rooms.delete(roomCode);
       cleanedCount++;
