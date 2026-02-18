@@ -293,10 +293,10 @@
             flex-wrap: wrap;
         }
         
-        .call-btn { background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); }
-        .raise-btn { background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%); color: #fff; }
-        .fold-btn { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); }
-        .check-btn { background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); }
+        .call-btn { background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); color: #fff; }
+        .raise-btn { background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%); color: #fff !important; }
+        .fold-btn { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); color: #fff !important; }
+        .check-btn { background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); color: #fff !important; }
         
         .message {
             text-align: center;
@@ -566,24 +566,39 @@
             
             // 玩家列表
             const playersGrid = document.getElementById('gamePlayers');
+            const isGameOver = gameState.phase === 'finished' || gameState.phase === 'showdown';
+            
             playersGrid.innerHTML = gameState.players.map((p, i) => {
                 if (!p) return '<div class="game-player" style="opacity:0.3;"><div style="color:#666;">空位</div></div>';
                 
                 const isCurrent = i === gameState.currentPlayerIndex;
                 const isMe = p.id === myPlayerId;
-                const cardsHtml = p.hand.map(c => 
+                const cardsHtml = p.hand ? p.hand.map(c => 
                     c.hidden ? '<div class="card hidden">?</div>' :
                     `<div class="card ${c.suit === '♥' || c.suit === '♦' ? 'red' : 'black'}">${c.suit}${c.rank}</div>`
-                ).join('');
+                ).join('') : '';
+                
+                // 游戏结束时亮牌（包括弃牌玩家）
+                const showCards = isMe || isGameOver;
+                
+                // 下注显示：过牌时显示"过牌"，有下注显示金额
+                let betText = '';
+                if (p.folded) {
+                    betText = '已弃牌';
+                } else if (p.isAllIn) {
+                    betText = 'All In!';
+                } else if (p.bet === 0) {
+                    betText = '过牌';
+                } else {
+                    betText = `下注: ${p.bet}`;
+                }
                 
                 return `
                     <div class="game-player ${isCurrent ? 'current' : ''} ${p.folded ? 'folded' : ''} ${p.isAI ? 'is-ai' : ''}">
                         <div style="font-weight:bold;">${p.name}${isMe ? ' (你)' : ''}${p.isAI ? ' 🤖' : ''}</div>
                         <div style="font-size:0.8em;color:#ffd700;">💰 ${p.chips}</div>
-                        <div class="cards">${isMe || gameState.phase === 'showdown' ? cardsHtml : '<div class="card hidden">?</div><div class="card hidden">?</div>'}</div>
-                        <div style="font-size:0.75em;color:#aaa;">
-                            ${p.folded ? '已弃牌' : p.isAllIn ? 'All In!' : `下注: ${p.bet}`}
-                        </div>
+                        <div class="cards">${showCards ? cardsHtml : '<div class="card hidden">?</div><div class="card hidden">?</div>'}</div>
+                        <div style="font-size:0.75em;color:#aaa;">${betText}</div>
                     </div>
                 `;
             }).join('');
@@ -601,22 +616,9 @@
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
             let message = '';
             
-            if (gameState.phase === 'finished' || gameState.phase === 'showdown') {
-                // 显示获胜者
-                if (gameState.winner) {
-                    if (gameState.winner.name) {
-                        const isMe = gameState.players.find(p => p && p.id === myPlayerId && p.name === gameState.winner.name);
-                        message = isMe ? `🎉 你获胜了！赢得 ${gameState.winner.pot} 筹码！` : `🎉 ${gameState.winner.name} 获胜！赢得 ${gameState.winner.pot} 筹码！`;
-                    } else {
-                        message = '🎉 游戏结束！';
-                    }
-                } else {
-                    // 兼容旧逻辑
-                    const anyWinner = gameState.players.find(p => p && !p.folded);
-                    message = anyWinner ? `🎉 ${anyWinner.name} 获胜！` : '🎉 游戏结束！';
-                }
-            } else if (!gameState.gameActive) {
-                message = '游戏结束';
+            if (!gameState.gameActive) {
+                // 游戏结束时消息为空（获胜信息显示在按钮区域）
+                message = '';
             } else if (currentPlayer) {
                 if (currentPlayer.id === myPlayerId) {
                     message = '轮到你行动！';
@@ -635,12 +637,20 @@
             const controls = document.getElementById('gameControls');
             
             if (!gameState || !gameState.gameActive) {
-                // 游戏结束，显示下一局和返回房间按钮
-                const isHost = currentRoomCode && rooms_data && rooms_data[currentRoomCode] === myPlayerId;
+                // 游戏结束，显示获胜信息 + 下一局和返回房间按钮
+                let winnerHtml = '';
+                if (gameState && gameState.winner && gameState.winner.name) {
+                    const isMe = gameState.players && gameState.players.find(p => p && p.id === myPlayerId && p.name === gameState.winner.name);
+                    winnerHtml = `<div style="font-size:1.3em;color:#ffd700;margin-bottom:15px;">${isMe ? '🎉 你获胜了！' : `🎉 ${gameState.winner.name} 获胜！`} 赢得 ${gameState.winner.pot} 筹码！</div>`;
+                }
+                
                 controls.innerHTML = `
-                    <div class="controls-row">
-                        <button class="btn btn-primary" onclick="startNextGame()" style="background:#4CAF50;margin-right:10px;">下一局</button>
-                        <button class="btn" onclick="backToRoom()">返回房间</button>
+                    <div class="controls-row" style="flex-direction:column;align-items:center;">
+                        ${winnerHtml}
+                        <div>
+                            <button class="btn btn-primary" onclick="startNextGame()" style="background:#4CAF50;margin-right:10px;">下一局</button>
+                            <button class="btn" onclick="backToRoom()">返回房间</button>
+                        </div>
                     </div>
                 `;
                 return;
