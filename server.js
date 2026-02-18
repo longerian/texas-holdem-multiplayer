@@ -403,12 +403,16 @@ function nextPhase(room) {
 function showdown(room) {
   const gs = room.gameState;
   gs.phase = 'showdown';
+  gs.gameActive = false; // 立即设为不活跃
   
   const activePlayers = gs.players.filter(p => p && !p.folded);
   
   // 简化版：随机赢家（后续可加入牌力比较）
   const winner = activePlayers[Math.floor(Math.random() * activePlayers.length)];
   winner.chips += gs.pot;
+  
+  // 保存获胜者信息
+  gs.winner = { name: winner.name, chips: winner.chips, pot: gs.pot };
   
   console.log(`showdown: ${winner.name} 获胜，赢得 ${gs.pot} 筹码`);
   
@@ -419,22 +423,17 @@ function showdown(room) {
     }
   });
   
+  // 直接设置为 finished，保持在这个画面直到下一局
+  gs.phase = 'finished';
   broadcastGameState(room.code);
-  
-  // 3秒后可以开始新一局
-  setTimeout(() => {
-    gs.gameActive = false;
-    gs.phase = 'waiting';
-    console.log('游戏结束，返回房间');
-    broadcastGameState(room.code);
-    broadcastRoomState(room.code);
-  }, 3000);
+  broadcastRoomState(room.code);
 }
 
 // 结束一轮
 function endRound(room, winner) {
   const gs = room.gameState;
   gs.phase = 'showdown';
+  gs.gameActive = false; // 立即设为不活跃，防止AI继续行动
   winner.chips += gs.pot;
   
   // 保存获胜者信息
@@ -449,15 +448,10 @@ function endRound(room, winner) {
     }
   });
   
+  // 直接广播最终状态，保持在这个画面直到下一局
+  gs.phase = 'finished';
   broadcastGameState(room.code);
-  
-  setTimeout(() => {
-    gs.gameActive = false;
-    gs.phase = 'finished';
-    console.log('游戏结束，可以开始下一局');
-    broadcastGameState(room.code);
-    broadcastRoomState(room.code);
-  }, 2000);
+  broadcastRoomState(room.code);
 }
 
 // Socket.IO
