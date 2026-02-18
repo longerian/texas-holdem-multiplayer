@@ -66,7 +66,8 @@ function createRoom() {
       dealerIndex: 0,
       players: [],
       actedThisRound: [],
-      lastRaisePlayerIndex: -1
+      lastRaisePlayerIndex: -1,
+      roundActionCount: 0  // 本轮行动次数，防止无限循环
     }
   };
 }
@@ -102,11 +103,18 @@ function broadcastGameState(roomCode) {
       ...gs,
       players: gs.players.map((p, i) => {
         if (!p) return null;
+        
+        // 计算牌型（游戏中只显示自己的，结束时显示所有人的）
+        const handType = (p.id === seat.id || isGameOver) && p.hand && gs.communityCards && gs.communityCards.length >= 3
+          ? getBestHandDescription(p.hand, gs.communityCards)
+          : null;
+        
         if (p.id === seat.id || isGameOver) {
-          return p;
+          return { ...p, handType };
         }
         return {
           ...p,
+          handType: null,
           hand: p.hand && p.hand.length > 0 ? [{ hidden: true }, { hidden: true }] : []
         };
       })
@@ -151,6 +159,7 @@ function startGame(room) {
   gs.phase = 'preflop';
   gs.gameActive = true;
   gs.actedThisRound = [];
+  gs.roundActionCount = 0;
   gs.dealerIndex = (gs.dealerIndex + 1) % 6;
   
   // 跳过空位找到庄家
@@ -253,6 +262,14 @@ function executeAction(room, player, action, amount = 0) {
   const gs = room.gameState;
   const playerIndex = player.index;
   
+  // 防止无限循环：每轮最多行动 50 次
+  gs.roundActionCount++;
+  if (gs.roundActionCount > 50) {
+    console.log('行动次数过多，强制进入下一阶段');
+    nextPhase(room);
+    return;
+  }
+  
   console.log(`执行行动: ${player.name} ${action} ${amount}`);
   
   switch (action) {
@@ -320,18 +337,20 @@ function nextPlayer(room) {
   
   // 找下一个需要行动的玩家
   let nextIndex = (gs.currentPlayerIndex + 1) % 6;
-  let attempts = 0;
+  let startIndex = nextIndex;
+  let loops = 0;
   
-  while (attempts < 6) {
-    const nextPlayer = gs.players[nextIndex];
+  while (loops < 6) {
+    const nextP = gs.players[nextIndex];
     
-    if (nextPlayer && !nextPlayer.folded && !nextPlayer.isAllIn && nextPlayer.chips > 0) {
+    if (nextP && !nextP.folded && !nextP.isAllIn && nextP.chips > 0) {
+      // 如果这个玩家还没行动，或者当前下注大于他的下注（有人加注）
       const needsToAct = !gs.actedThisRound.includes(nextIndex) || 
-                         (gs.currentBet > nextPlayer.bet);
+                         (gs.currentBet > nextP.bet);
       
       if (needsToAct) {
         gs.currentPlayerIndex = nextIndex;
-        console.log(`下一个玩家: ${nextPlayer.name}, index: ${nextIndex}, isAI: ${nextPlayer.isAI}`);
+        console.log(`下一个玩家: ${nextP.name}, index: ${nextIndex}, isAI: ${nextP.isAI}`);
         broadcastGameState(room.code);
         checkAITurn(room);
         return;
@@ -339,7 +358,7 @@ function nextPlayer(room) {
     }
     
     nextIndex = (nextIndex + 1) % 6;
-    attempts++;
+    if (nextIndex === startIndex) loops++;
   }
   
   console.log('进入下一阶段');
@@ -355,6 +374,7 @@ function nextPhase(room) {
   gs.players.forEach(p => { if (p) p.bet = 0; });
   gs.currentBet = 0;
   gs.actedThisRound = [];
+  gs.roundActionCount = 0;  // 重置行动计数
   
   switch (gs.phase) {
     case 'preflop':
