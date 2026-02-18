@@ -306,6 +306,109 @@
             margin: 10px 0;
         }
         
+        /* 加注滑块弹窗样式 */
+        .raise-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .raise-modal-content {
+            background: linear-gradient(135deg, #2c3e50 0%, #1a1a2e 100%);
+            padding: 25px 30px;
+            border-radius: 20px;
+            text-align: center;
+            min-width: 300px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+        
+        .raise-title {
+            font-size: 1.1em;
+            color: #aaa;
+            margin-bottom: 10px;
+        }
+        
+        .raise-amount {
+            font-size: 2.5em;
+            color: #ffd700;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        
+        .raise-slider {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: #444;
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+        
+        .raise-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(155, 89, 182, 0.5);
+        }
+        
+        .raise-slider::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+            cursor: pointer;
+            border: none;
+        }
+        
+        .raise-range {
+            display: flex;
+            justify-content: space-between;
+            color: #888;
+            font-size: 0.85em;
+            margin: 10px 0 15px;
+        }
+        
+        .raise-presets {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .raise-preset-btn {
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            color: #fff;
+            font-size: 0.85em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .raise-preset-btn:hover {
+            background: rgba(155, 89, 182, 0.5);
+            border-color: #9b59b6;
+        }
+        
+        .raise-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+        
         .hidden { display: none !important; }
         
         @media (max-width: 768px) {
@@ -383,6 +486,24 @@
             <div class="controls" id="gameControls">
                 <div class="controls-row">
                     <button class="btn" disabled>等待中...</button>
+                </div>
+            </div>
+            
+            <!-- 加注滑块弹窗 -->
+            <div id="raiseModal" class="raise-modal hidden">
+                <div class="raise-modal-content">
+                    <div class="raise-title">选择加注金额</div>
+                    <div class="raise-amount" id="raiseAmountDisplay">0</div>
+                    <input type="range" id="raiseSlider" class="raise-slider" min="0" max="1000" value="0">
+                    <div class="raise-range">
+                        <span id="raiseMin">0</span>
+                        <span id="raiseMax">0</span>
+                    </div>
+                    <div class="raise-presets" id="raisePresets"></div>
+                    <div class="raise-buttons">
+                        <button class="btn btn-secondary" onclick="hideRaiseModal()">取消</button>
+                        <button class="btn btn-success" onclick="confirmRaise()">确认加注</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -711,10 +832,55 @@
             const minRaise = gameState.currentBet + gameState.bigBlind;
             const maxRaise = me.chips + me.bet;
             
-            const amount = prompt(`加注金额 (${minRaise} - ${maxRaise}):`, minRaise);
-            if (amount) {
-                playerAction('raise', parseInt(amount));
-            }
+            const slider = document.getElementById('raiseSlider');
+            const amountDisplay = document.getElementById('raiseAmountDisplay');
+            const minDisplay = document.getElementById('raiseMin');
+            const maxDisplay = document.getElementById('raiseMax');
+            const presetsContainer = document.getElementById('raisePresets');
+            
+            slider.min = minRaise;
+            slider.max = maxRaise;
+            slider.value = minRaise;
+            
+            minDisplay.textContent = minRaise;
+            maxDisplay.textContent = maxRaise;
+            amountDisplay.textContent = minRaise;
+            
+            // 生成快捷按钮
+            const presets = [
+                { label: '最小', value: minRaise },
+                { label: '1/2底池', value: Math.min(maxRaise, Math.floor(gameState.pot / 2 + me.bet)) },
+                { label: '底池', value: Math.min(maxRaise, gameState.pot + me.bet) },
+                { label: 'All in', value: maxRaise }
+            ];
+            
+            presetsContainer.innerHTML = presets.map(p => 
+                `<button class="raise-preset-btn" onclick="setRaiseAmount(${p.value})">${p.label}</button>`
+            ).join('');
+            
+            // 滑块变化事件
+            slider.oninput = function() {
+                amountDisplay.textContent = this.value;
+            };
+            
+            document.getElementById('raiseModal').classList.remove('hidden');
+        }
+        
+        function setRaiseAmount(value) {
+            const slider = document.getElementById('raiseSlider');
+            const amountDisplay = document.getElementById('raiseAmountDisplay');
+            slider.value = value;
+            amountDisplay.textContent = value;
+        }
+        
+        function hideRaiseModal() {
+            document.getElementById('raiseModal').classList.add('hidden');
+        }
+        
+        function confirmRaise() {
+            const amount = parseInt(document.getElementById('raiseSlider').value);
+            hideRaiseModal();
+            playerAction('raise', amount);
         }
         
         function playerAction(action, amount = 0) {
