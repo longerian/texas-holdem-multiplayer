@@ -262,9 +262,9 @@ function executeAction(room, player, action, amount = 0) {
   const gs = room.gameState;
   const playerIndex = player.index;
   
-  // 防止无限循环：每轮最多行动 50 次
+  // 防止无限循环：每轮最多行动 100 次（正常德州不会超过 20 次）
   gs.roundActionCount++;
-  if (gs.roundActionCount > 50) {
+  if (gs.roundActionCount > 100) {
     console.log('行动次数过多，强制进入下一阶段');
     nextPhase(room);
     return;
