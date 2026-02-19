@@ -808,14 +808,17 @@ io.on('connection', (socket) => {
   
   // 重新加入房间（重连）
   socket.on('rejoinRoom', (data) => {
+    console.log(`收到重连请求: ${data.name} -> 房间 ${data.roomCode}`);
     const room = rooms.get(data.roomCode);
     if (!room) {
+      console.log(`房间不存在: ${data.roomCode}`);
       socket.emit('error', { message: '房间不存在' });
       return;
     }
     
     // 查找是否有同名的座位（可能是之前断开的）
     const seatIndex = room.seats.findIndex(s => s && s.name === data.name && !s.isAI);
+    console.log(`查找座位结果: seatIndex=${seatIndex}, 当前座位:`, room.seats.map((s,i) => s ? `${i}:${s.name}` : `${i}:null`));
     
     if (seatIndex !== -1) {
       const seat = room.seats[seatIndex];
@@ -849,36 +852,32 @@ io.on('connection', (socket) => {
         broadcastGameState(data.roomCode);
       }
       
-      console.log(`玩家 ${data.name} 重新连接`);
+      console.log(`玩家 ${data.name} 重新连接成功`);
+    } else {
+      console.log(`未找到玩家 ${data.name} 的座位`);
+      socket.emit('error', { message: '未找到你的座位，请重新加入' });
     }
   });
   
   // 断开连接
   socket.on('disconnect', () => {
+    console.log(`玩家断开连接: ${socket.id}`);
     rooms.forEach((room, roomCode) => {
       const seatIndex = room.seats.findIndex(s => s && s.id === socket.id);
       if (seatIndex !== -1) {
         const seat = room.seats[seatIndex];
+        console.log(`找到断线玩家: ${seat.name}, 游戏状态: ${room.gameState?.gameActive ? '进行中' : '未开始'}`);
         
-        // 如果游戏正在进行，保留座位一段时间等待重连
-        if (room.gameState && room.gameState.gameActive) {
-          console.log(`玩家 ${seat.name} 断开连接，等待重连...`);
-          seat.connected = false; // 标记为断线
-          broadcastRoomState(roomCode);
-          // 不清空座位，等待重连
-          return;
-        }
-        
-        // 游戏未开始，清空座位
-        room.seats[seatIndex] = null;
-        
-        // 转移房主
-        if (room.hostId === socket.id) {
-          const newHost = room.seats.find(s => s && !s.isAI);
-          room.hostId = newHost ? newHost.id : null;
-        }
-        
+        // 无论游戏是否开始，都保留座位等待重连（5分钟内）
+        seat.connected = false; // 标记为断线
+        disconnectedPlayers.set(socket.id, {
+          roomCode,
+          seatIndex,
+          name: seat.name,
+          disconnectTime: Date.now()
+        });
         broadcastRoomState(roomCode);
+        console.log(`玩家 ${seat.name} 断开连接，等待重连...`);
       }
     });
   });
@@ -888,3 +887,32 @@ const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {
   console.log(`德州扑克多人版运行在 http://localhost:${PORT}`);
 });
+
+// 定期清理断线超过5分钟的玩家
+setInterval(() => {
+  const now = Date.now();
+  const timeout = 5 * 60 * 1000; // 5分钟
+  
+  disconnectedPlayers.forEach((info, oldId) => {
+    if (now - info.disconnectTime > timeout) {
+      const room = rooms.get(info.roomCode);
+      if (room && room.seats[info.seatIndex]) {
+        const seat = room.seats[info.seatIndex];
+        // 只有当座位还是断线玩家时才清理
+        if (seat && seat.name === info.name && !seat.connected) {
+          console.log(`清理超时断线玩家: ${info.name}`);
+          room.seats[info.seatIndex] = null;
+          
+          // 转移房主
+          if (room.hostId === oldId) {
+            const newHost = room.seats.find(s => s && !s.isAI);
+            room.hostId = newHost ? newHost.id : null;
+          }
+          
+          broadcastRoomState(info.roomCode);
+        }
+      }
+      disconnectedPlayers.delete(oldId);
+    }
+  });
+}, 60000); // 每分钟检查一次

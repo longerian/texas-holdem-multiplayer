@@ -511,13 +511,13 @@
     
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        // 配置 Socket.IO 自动重连
+        // 配置 Socket.IO 自动重连（更激进的配置）
         const socket = io({
             reconnection: true,
-            reconnectionAttempts: 10,
-            reconnectionDelay: 1000,
-            reconnectionDelayMax: 5000,
-            timeout: 20000
+            reconnectionAttempts: 20,
+            reconnectionDelay: 500,
+            reconnectionDelayMax: 3000,
+            timeout: 30000
         });
         let currentRoomCode = null;
         let myPlayerId = null;
@@ -526,29 +526,57 @@
         let roomData = null;
         let playerName = '';
         let lastRejoinTime = 0; // 防抖：记录上次重入时间
+        let reconnectAttempts = 0;
         
-        // 显示连接状态提示
-        function showConnectionStatus(status) {
-            const msg = document.getElementById('gameMessage') || document.querySelector('.message');
-            if (msg) {
-                if (status === 'disconnected') {
-                    msg.textContent = '⚠️ 连接已断开，正在重连...';
-                    msg.style.color = '#ff6b6b';
-                } else if (status === 'reconnecting') {
-                    msg.textContent = '🔄 正在重新连接...';
-                    msg.style.color = '#ffd700';
-                } else if (status === 'connected') {
-                    msg.style.color = '';
+        // 显示连接状态提示（带更明显的UI）
+        function showConnectionStatus(status, extraMsg = '') {
+            // 尝试找多个可能的显示位置
+            let msg = document.getElementById('gameMessage');
+            if (!msg) msg = document.querySelector('.message');
+            if (!msg) {
+                // 创建一个固定的状态提示框
+                msg = document.getElementById('connectionStatus');
+                if (!msg) {
+                    msg = document.createElement('div');
+                    msg.id = 'connectionStatus';
+                    msg.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:10px;font-weight:bold;z-index:9999;transition:opacity 0.3s;';
+                    document.body.appendChild(msg);
                 }
+            }
+            
+            if (status === 'disconnected') {
+                msg.textContent = '⚠️ 连接已断开，正在重连... ' + extraMsg;
+                msg.style.color = '#fff';
+                msg.style.background = 'rgba(231,76,60,0.9)';
+                msg.style.opacity = '1';
+            } else if (status === 'reconnecting') {
+                msg.textContent = '🔄 正在重新连接... (' + extraMsg + ')';
+                msg.style.color = '#fff';
+                msg.style.background = 'rgba(241,196,15,0.9)';
+                msg.style.opacity = '1';
+            } else if (status === 'connected') {
+                msg.textContent = extraMsg || '✅ 已连接';
+                msg.style.color = '#fff';
+                msg.style.background = 'rgba(46,204,113,0.9)';
+                msg.style.opacity = '1';
+                setTimeout(() => { msg.style.opacity = '0'; }, 2000);
+            } else if (status === 'failed') {
+                msg.innerHTML = '❌ 重连失败 <button onclick="location.reload()" style="margin-left:10px;padding:5px 15px;border-radius:5px;border:none;background:#fff;cursor:pointer;">刷新页面</button>';
+                msg.style.color = '#fff';
+                msg.style.background = 'rgba(192,57,43,0.95)';
+                msg.style.opacity = '1';
             }
         }
         
         // Socket.IO 事件
         socket.on('connect', () => {
-            console.log('已连接到服务器');
+            console.log('已连接到服务器, socket.id:', socket.id);
+            reconnectAttempts = 0;
             showConnectionStatus('connected');
+            
             // 如果之前在房间或游戏中，尝试重新加入
             if (currentRoomCode && playerName) {
+                console.log('连接后尝试重入房间:', currentRoomCode);
                 socket.emit('rejoinRoom', { name: playerName, roomCode: currentRoomCode });
             }
         });
@@ -560,39 +588,55 @@
         
         socket.on('reconnecting', (attemptNumber) => {
             console.log(`正在重连 (${attemptNumber})`);
-            showConnectionStatus('reconnecting');
+            reconnectAttempts = attemptNumber;
+            showConnectionStatus('reconnecting', attemptNumber + '/20');
         });
         
         socket.on('reconnect', (attemptNumber) => {
-            console.log(`重连成功 (${attemptNumber})`);
-            showConnectionStatus('connected');
+            console.log(`重连成功 (${attemptNumber}), socket.id:`, socket.id);
+            showConnectionStatus('connected', '重连成功！');
             
             // 如果之前在房间中，自动重入
             if (currentRoomCode && playerName) {
                 console.log(`自动重入房间: ${currentRoomCode}`);
                 lastRejoinTime = Date.now();
-                socket.emit('rejoinRoom', { roomCode: currentRoomCode, name: playerName });
+                setTimeout(() => {
+                    socket.emit('rejoinRoom', { roomCode: currentRoomCode, name: playerName });
+                }, 100); // 稍微延迟确保连接稳定
             }
         });
         
         socket.on('reconnect_failed', () => {
             console.log('重连失败');
-            alert('连接已断开，请刷新页面重新进入');
+            showConnectionStatus('failed');
+        });
+        
+        // 服务器返回错误
+        socket.on('error', (data) => {
+            console.log('服务器错误:', data.message);
+            if (data.message === '房间不存在') {
+                // 房间已过期，提示用户
+                const status = document.getElementById('connectionStatus');
+                if (status) {
+                    status.innerHTML = '⚠️ 房间已过期，请重新创建 <button onclick="location.reload()" style="margin-left:10px;padding:5px 15px;border-radius:5px;border:none;background:#fff;cursor:pointer;">返回首页</button>';
+                }
+            }
         });
         
         // 页面可见性变化时检查连接
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                console.log('页面重新可见，检查连接状态');
+                console.log('页面重新可见，检查连接状态, socket.connected:', socket.connected);
                 
-                // 防抖：3秒内不重复请求
+                // 防抖：2秒内不重复请求
                 const now = Date.now();
-                if (now - lastRejoinTime < 3000) {
+                if (now - lastRejoinTime < 2000) {
                     console.log('防抖：跳过重入请求');
                     return;
                 }
                 
                 if (!socket.connected) {
+                    console.log('socket未连接，尝试重连...');
                     socket.connect();
                 } else if (currentRoomCode && playerName) {
                     // 已连接但在房间中，主动请求刷新状态
