@@ -525,6 +525,7 @@
         let gameState = null;
         let roomData = null;
         let playerName = '';
+        let lastRejoinTime = 0; // 防抖：记录上次重入时间
         
         // 显示连接状态提示
         function showConnectionStatus(status) {
@@ -565,6 +566,13 @@
         socket.on('reconnect', (attemptNumber) => {
             console.log(`重连成功 (${attemptNumber})`);
             showConnectionStatus('connected');
+            
+            // 如果之前在房间中，自动重入
+            if (currentRoomCode && playerName) {
+                console.log(`自动重入房间: ${currentRoomCode}`);
+                lastRejoinTime = Date.now();
+                socket.emit('rejoinRoom', { roomCode: currentRoomCode, name: playerName });
+            }
         });
         
         socket.on('reconnect_failed', () => {
@@ -576,8 +584,21 @@
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 console.log('页面重新可见，检查连接状态');
+                
+                // 防抖：3秒内不重复请求
+                const now = Date.now();
+                if (now - lastRejoinTime < 3000) {
+                    console.log('防抖：跳过重入请求');
+                    return;
+                }
+                
                 if (!socket.connected) {
                     socket.connect();
+                } else if (currentRoomCode && playerName) {
+                    // 已连接但在房间中，主动请求刷新状态
+                    console.log(`刷新房间状态: ${currentRoomCode}`);
+                    lastRejoinTime = now;
+                    socket.emit('rejoinRoom', { roomCode: currentRoomCode, name: playerName });
                 }
             }
         });
