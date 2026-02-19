@@ -297,8 +297,9 @@ function checkAITurn(room) {
   const currentPlayer = gs.players[gs.currentPlayerIndex];
   if (!currentPlayer || !currentPlayer.isAI) return;
   
-  // AI延迟500ms后行动
-  setTimeout(() => aiTurn(room), 500);
+  // AI延迟1.5-3秒后行动（更像真人思考）
+  const delay = 1500 + Math.random() * 1500;
+  setTimeout(() => aiTurn(room), delay);
 }
 
 // AI决策 - 使用职业牌手引擎
