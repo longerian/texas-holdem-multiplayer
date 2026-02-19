@@ -8,14 +8,14 @@ let playerAggression = 0.3;
 let playerRaiseCount = 0;
 let playerTotalActions = 0;
 
-// AI风格配置
+// AI风格配置 - 职业牌手级别，风格多样化
 function getAIPlayerStyle(playerId) {
     const styles = [
-        { aggression: 0.65, bluffRate: 0.18, callRate: 0.75, name: '稳健玩家' },
-        { aggression: 0.60, bluffRate: 0.15, callRate: 0.78, name: '正常玩家' },
-        { aggression: 0.70, bluffRate: 0.20, callRate: 0.72, name: '积极玩家' },
-        { aggression: 0.68, bluffRate: 0.17, callRate: 0.74, name: '平衡玩家' },
-        { aggression: 0.62, bluffRate: 0.16, callRate: 0.76, name: '谨慎玩家' }
+        { aggression: 0.78, bluffRate: 0.22, callRate: 0.75, name: '职业TAG' },
+        { aggression: 0.82, bluffRate: 0.28, callRate: 0.72, name: 'GTO专家' },
+        { aggression: 0.88, bluffRate: 0.35, callRate: 0.68, name: '职业LAG' },
+        { aggression: 0.75, bluffRate: 0.20, callRate: 0.78, name: '稳健职业' },
+        { aggression: 0.85, bluffRate: 0.30, callRate: 0.70, name: '策略大师' }
     ];
     return styles[(playerId - 1) % styles.length];
 }
@@ -355,42 +355,42 @@ function aiDecision(player, gameState, room) {
         const preflopPotOdds = toCall > 0 ? toCall / (gameState.pot + toCall) : 0;
         
         if (toCall > 0) {
-            // 面对加注 - 更保守
+            // 面对加注 - 职业牌手级别
             if (preflopStrength > 0.85) {
-                decision = Math.random() < 0.5 ? 'raise' : 'call';
+                decision = Math.random() < 0.65 ? 'raise' : 'call';
             } else if (preflopStrength > 0.7) {
-                decision = Math.random() < 0.3 ? 'raise' : 'call';
+                decision = Math.random() < 0.45 ? 'raise' : 'call';
             } else if (preflopStrength > 0.55) {
-                decision = Math.random() < 0.2 ? 'raise' : 'call';
+                decision = Math.random() < 0.3 ? 'raise' : 'call';
             } else if (preflopStrength > 0.45) {
-                if (preflopPotOdds < 0.3 || highBluffSuspicion) {
-                    decision = Math.random() < 0.65 ? 'call' : 'fold';
+                if (preflopPotOdds < 0.35 || highBluffSuspicion) {
+                    decision = Math.random() < 0.7 ? 'call' : 'fold';
                 } else {
-                    decision = Math.random() < 0.5 ? 'call' : 'fold';
+                    decision = Math.random() < 0.55 ? 'call' : 'fold';
                 }
             } else if (preflopStrength > 0.35) {
-                if (preflopPotOdds < 0.18 || highBluffSuspicion) {
-                    decision = Math.random() < 0.5 ? 'call' : 'fold';
+                if (preflopPotOdds < 0.2 || highBluffSuspicion) {
+                    decision = Math.random() < 0.55 ? 'call' : 'fold';
                 }
-            } else if (highBluffSuspicion && preflopPotOdds < 0.12) {
-                decision = Math.random() < 0.3 ? 'call' : 'fold';
+            } else if (highBluffSuspicion && preflopPotOdds < 0.15) {
+                decision = Math.random() < 0.35 ? 'call' : 'fold';
             }
         } else {
-            // 没人加注 - 降低加注频率
-            if (preflopStrength > 0.6) {
-                decision = Math.random() < (style.aggression * 0.7) ? 'raise' : 'check';
-            } else if (preflopStrength > 0.45 && positionAdv > 0.7) {
-                decision = Math.random() < (style.bluffRate * 0.8) ? 'raise' : 'check';
-            } else if (positionAdv > 0.9 && Math.random() < 0.08) {
-                decision = 'raise';
+            // 没人加注 - 职业牌手合理加注
+            if (preflopStrength > 0.55) {
+                decision = Math.random() < style.aggression ? 'raise' : 'check';
+            } else if (preflopStrength > 0.4 && positionAdv > 0.7) {
+                decision = Math.random() < (style.bluffRate * 1.2) ? 'raise' : 'check';
+            } else if (positionAdv > 0.9) {
+                decision = Math.random() < (style.bluffRate * 0.6) ? 'raise' : 'check';
             } else {
                 decision = 'check';
             }
         }
         
         if (decision === 'raise') {
-            // 翻前加注量更正常（2-4BB）
-            const baseRaise = gameState.bigBlind * (2 + Math.random() * 2);
+            // 翻前加注量2-4BB（更合理的职业范围）
+            const baseRaise = gameState.bigBlind * (2.5 + Math.random() * 1.5);
             raiseAmount = Math.min(Math.floor(baseRaise), player.chips + player.bet);
             const minRaise = gameState.currentBet + gameState.bigBlind;
             raiseAmount = Math.max(raiseAmount, minRaise);
