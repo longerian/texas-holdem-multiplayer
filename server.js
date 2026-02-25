@@ -402,6 +402,26 @@ function nextPlayer(room) {
     return;
   }
   
+  // 检查是否所有人都 all in 或已行动
+  const nonAllInPlayers = activePlayers.filter(p => !p.isAllIn && p.chips > 0);
+  
+  // 如果没有人能行动了（所有人都 all in），直接发完5张牌摊牌
+  if (nonAllInPlayers.length === 0) {
+    console.log('所有人都 all in，直接发完5张牌');
+    // 直接发5张公共牌
+    gs.communityCards = [];
+    for (let i = 0; i < 5; i++) {
+      gs.communityCards.push(gs.deck.pop());
+    }
+    gs.phase = 'river';
+    broadcastGameState(room.code);
+    // 延迟一下再摊牌，让玩家看清
+    setTimeout(() => {
+      showdown(room);
+    }, 1000);
+    return;
+  }
+  
   // 找下一个需要行动的玩家
   let nextIndex = (gs.currentPlayerIndex + 1) % 6;
   let startIndex = nextIndex;
@@ -475,10 +495,20 @@ function nextPhase(room) {
     startIndex = (startIndex + 1) % 6;
   }
   
-  // 如果没找到可行动的玩家，直接摊牌
+  // 如果没找到可行动的玩家，继续发牌直到5张再摊牌
   if (!found) {
-    console.log('没有可行动的玩家，直接摊牌');
-    showdown(room);
+    console.log('没有可行动的玩家，继续发牌到5张');
+    // 继续发牌直到5张
+    while (gs.communityCards.length < 5) {
+      const card = gs.deck.pop();
+      if (card) gs.communityCards.push(card);
+    }
+    gs.phase = 'river';
+    broadcastGameState(room.code);
+    // 延迟一下再摊牌
+    setTimeout(() => {
+      showdown(room);
+    }, 1000);
     return;
   }
   
@@ -489,6 +519,16 @@ function nextPhase(room) {
 // 摊牌
 function showdown(room) {
   const gs = room.gameState;
+  
+  // 保护：确保有5张公共牌
+  if (gs.communityCards.length < 5) {
+    console.log(`公共牌不足(${gs.communityCards.length}张)，补发到5张`);
+    while (gs.communityCards.length < 5) {
+      const card = gs.deck.pop();
+      if (card) gs.communityCards.push(card);
+    }
+  }
+  
   gs.phase = 'showdown';
   gs.gameActive = false; // 立即设为不活跃
   
