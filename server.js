@@ -280,7 +280,7 @@ function startGame(room) {
   
   // 从大盲后开始
   gs.currentPlayerIndex = (bbIndex + 1) % 6;
-  let safety = 0;
+  safety = 0;
   while ((!gs.players[gs.currentPlayerIndex] || 
           gs.players[gs.currentPlayerIndex].folded || 
           gs.players[gs.currentPlayerIndex].isAllIn ||
