@@ -246,12 +246,20 @@ function startGame(room) {
     }
   });
   
-  // 设置盲注 - 找到庄家后的两个有效玩家
+  // 设置盲注 - 找到庄家后的两个有效玩家（跳过空位和筹码为0的玩家）
   let sbIndex = (gs.dealerIndex + 1) % 6;
-  while (!gs.players[sbIndex]) sbIndex = (sbIndex + 1) % 6;
+  let safety = 0;
+  while ((!gs.players[sbIndex] || gs.players[sbIndex].chips <= 0) && safety < 12) {
+    sbIndex = (sbIndex + 1) % 6;
+    safety++;
+  }
   
   let bbIndex = (sbIndex + 1) % 6;
-  while (!gs.players[bbIndex]) bbIndex = (bbIndex + 1) % 6;
+  safety = 0;
+  while ((!gs.players[bbIndex] || gs.players[bbIndex].chips <= 0) && safety < 12) {
+    bbIndex = (bbIndex + 1) % 6;
+    safety++;
+  }
   
   // 小盲
   const sbPlayer = gs.players[sbIndex];
