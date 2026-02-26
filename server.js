@@ -405,13 +405,13 @@ function nextPlayer(room) {
   // 检查是否所有人都 all in 或已行动
   const nonAllInPlayers = activePlayers.filter(p => !p.isAllIn && p.chips > 0);
   
-  // 如果没有人能行动了（所有人都 all in），直接发完5张牌摊牌
+  // 如果没有人能行动了（所有人都 all in），补发公共牌到5张再摊牌
   if (nonAllInPlayers.length === 0) {
-    console.log('所有人都 all in，直接发完5张牌');
-    // 直接发5张公共牌
-    gs.communityCards = [];
-    for (let i = 0; i < 5; i++) {
-      gs.communityCards.push(gs.deck.pop());
+    console.log(`所有人都 all in，当前公共牌${gs.communityCards.length}张，补发到5张`);
+    // 补发公共牌到5张（不清空已有的牌）
+    while (gs.communityCards.length < 5) {
+      const card = gs.deck.pop();
+      if (card) gs.communityCards.push(card);
     }
     gs.phase = 'river';
     broadcastGameState(room.code);
