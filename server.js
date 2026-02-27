@@ -554,11 +554,11 @@ function calculateSidePots(players) {
     if (currentBet > previousBet) {
       const layerAmount = currentBet - previousBet;
 
-      // 该层级的下注金额 * 所有下注达到该金额的玩家数量
+      // 该层级的下注金额 * 所有下注达到该金额的玩家数量（包括弃牌的）
       const playersAtThisLevel = allBettingPlayers.filter(p => (p.totalBet || 0) >= currentBet).length;
       const potAmount = layerAmount * playersAtThisLevel;
 
-      // 但只有未弃牌且下注达到该金额的玩家才能参与分配
+      // 只有未弃牌且下注达到该金额的玩家才能参与分配
       const eligiblePlayers = activePlayers
         .filter(p => (p.totalBet || 0) >= currentBet)
         .map(p => p.id);
@@ -572,6 +572,11 @@ function calculateSidePots(players) {
       previousBet = currentBet;
     }
   }
+
+  console.log('边注池计算:', {
+    allBets: allBettingPlayers.map(p => ({ name: p.name, totalBet: p.totalBet })),
+    pots: pots.map(pot => ({ amount: pot.amount, eligibleCount: pot.eligiblePlayers.length }))
+  });
 
   return pots;
 }
@@ -617,17 +622,23 @@ function showdown(room) {
   // 计算边注池
   const sidePots = calculateSidePots(gs.players);
   console.log('边注池:', JSON.stringify(sidePots));
-  
+
+  // 计算总底池（应该等于gs.pot）
+  const totalPotFromSidePots = sidePots.reduce((sum, pot) => sum + pot.amount, 0);
+  console.log(`底池对比: gs.pot=${gs.pot}, sidePots总和=${totalPotFromSidePots}`);
+
   let totalWon = {};
-  
+
   // 分配每个边注池
   for (const pot of sidePots) {
     if (pot.amount <= 0) continue;
-    
+
     // 在该边注池有资格的玩家中找赢家
     const eligibleEvals = playerEvals.filter(pe => pot.eligiblePlayers.includes(pe.player.id));
+    console.log(`边注池${pot.amount}: 有资格玩家=${eligibleEvals.map(pe => pe.player.name).join(',')}`);
+
     if (eligibleEvals.length === 0) continue;
-    
+
     // 找出该池中的赢家（可能有平局）
     const topEval = eligibleEvals[0].eval;
     const potWinners = eligibleEvals.filter(pe => {
@@ -639,14 +650,19 @@ function showdown(room) {
       }
       return true;
     });
-    
+
+    console.log(`边注池${pot.amount}: 赢家=${potWinners.map(w => w.player.name).join(',')}`);
+
     // 平分该边注池
     const share = Math.floor(pot.amount / potWinners.length);
     potWinners.forEach(w => {
       w.player.chips += share;
       totalWon[w.player.id] = (totalWon[w.player.id] || 0) + share;
+      console.log(`${w.player.name}赢得${share}筹码，总赢得${totalWon[w.player.id]}，当前筹码${w.player.chips}`);
     });
   }
+
+  console.log('最终赢得情况:', JSON.stringify(totalWon));
   
   // 为所有玩家添加牌型信息
   gs.players.forEach(p => {
