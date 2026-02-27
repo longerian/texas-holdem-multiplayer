@@ -524,6 +524,38 @@ function nextPhase(room) {
   checkAITurn(room);
 }
 
+// 计算边注池（Side Pot）
+function calculateSidePots(players) {
+  const activePlayers = players.filter(p => p && !p.folded && p.bet > 0);
+  if (activePlayers.length === 0) return [{ amount: 0, eligiblePlayers: players.map(p => p.id) }];
+  
+  // 按下注金额排序（从小到大）
+  const sortedByBet = [...activePlayers].sort((a, b) => a.bet - b.bet);
+  const pots = [];
+  let previousBet = 0;
+  
+  for (let i = 0; i < sortedByBet.length; i++) {
+    const currentPlayer = sortedByBet[i];
+    const currentBet = currentPlayer.bet;
+    
+    if (currentBet > previousBet) {
+      const layerAmount = currentBet - previousBet;
+      const eligiblePlayers = sortedByBet.filter(p => p.bet >= currentBet).map(p => p.id);
+      const potAmount = layerAmount * eligiblePlayers.length;
+      
+      if (potAmount > 0) {
+        pots.push({
+          amount: potAmount,
+          eligiblePlayers: eligiblePlayers
+        });
+      }
+      previousBet = currentBet;
+    }
+  }
+  
+  return pots;
+}
+
 // 摊牌
 function showdown(room) {
   const gs = room.gameState;
@@ -538,7 +570,7 @@ function showdown(room) {
   }
   
   gs.phase = 'showdown';
-  gs.gameActive = false; // 立即设为不活跃
+  gs.gameActive = false;
   
   const activePlayers = gs.players.filter(p => p && !p.folded);
   
@@ -554,35 +586,47 @@ function showdown(room) {
     if (a.eval.rank !== b.eval.rank) {
       return b.eval.rank - a.eval.rank;
     }
-    // 同牌型比较 kickers
     for (let i = 0; i < Math.max(a.eval.kickers.length, b.eval.kickers.length); i++) {
       const k1 = a.eval.kickers[i] || 0;
       const k2 = b.eval.kickers[i] || 0;
       if (k1 !== k2) return k2 - k1;
     }
-    return 0; // 完全相等
+    return 0;
   });
   
-  // 找出所有牌力相同的第一名玩家（可能平局）
-  const topEval = playerEvals[0].eval;
-  const winners = playerEvals.filter(pe => {
-    if (pe.eval.rank !== topEval.rank) return false;
-    for (let i = 0; i < Math.max(pe.eval.kickers.length, topEval.kickers.length); i++) {
-      const k1 = pe.eval.kickers[i] || 0;
-      const k2 = topEval.kickers[i] || 0;
-      if (k1 !== k2) return false;
-    }
-    return true;
-  }).map(pe => pe.player);
+  // 计算边注池
+  const sidePots = calculateSidePots(gs.players);
+  console.log('边注池:', JSON.stringify(sidePots));
   
-  // 平分底池
-  const winAmount = Math.floor(gs.pot / winners.length);
-  const remainder = gs.pot % winners.length;
+  let totalWon = {};
   
-  winners.forEach((w, i) => {
-    // 第一个赢家多拿余数
-    w.chips += winAmount + (i === 0 ? remainder : 0);
-  });
+  // 分配每个边注池
+  for (const pot of sidePots) {
+    if (pot.amount <= 0) continue;
+    
+    // 在该边注池有资格的玩家中找赢家
+    const eligibleEvals = playerEvals.filter(pe => pot.eligiblePlayers.includes(pe.player.id));
+    if (eligibleEvals.length === 0) continue;
+    
+    // 找出该池中的赢家（可能有平局）
+    const topEval = eligibleEvals[0].eval;
+    const potWinners = eligibleEvals.filter(pe => {
+      if (pe.eval.rank !== topEval.rank) return false;
+      for (let i = 0; i < Math.max(pe.eval.kickers.length, topEval.kickers.length); i++) {
+        const k1 = pe.eval.kickers[i] || 0;
+        const k2 = topEval.kickers[i] || 0;
+        if (k1 !== k2) return false;
+      }
+      return true;
+    });
+    
+    // 平分该边注池
+    const share = Math.floor(pot.amount / potWinners.length);
+    potWinners.forEach(w => {
+      w.player.chips += share;
+      totalWon[w.player.id] = (totalWon[w.player.id] || 0) + share;
+    });
+  }
   
   // 为所有玩家添加牌型信息
   gs.players.forEach(p => {
@@ -591,10 +635,27 @@ function showdown(room) {
     }
   });
   
-  // 保存获胜者信息
-  const winnerHandType = topEval.name;
-  if (winners.length === 1) {
-    gs.winner = { name: winners[0].name, chips: winners[0].chips, pot: gs.pot, handType: winnerHandType };
+  // 保存获胜者信息（显示赢得最多的玩家）
+  const mainWinner = playerEvals[0].player;
+  const winnerHandType = playerEvals[0].eval.name;
+  const totalWinAmount = totalWon[mainWinner.id] || 0;
+  
+  // 检查是否有多个玩家赢了筹码
+  const uniqueWinners = Object.keys(totalWon);
+  if (uniqueWinners.length === 1) {
+    gs.winner = { name: mainWinner.name, chips: mainWinner.chips, pot: totalWinAmount, handType: winnerHandType };
+    console.log(`showdown: ${mainWinner.name} 以 ${winnerHandType} 获胜，赢得 ${totalWinAmount} 筹码`);
+  } else {
+    // 多个赢家（边注池分配给不同玩家）
+    gs.winner = { name: '多人', chips: 0, pot: gs.pot, handType: '边注池分配' };
+    let logMsg = 'showdown: 边注池分配 - ';
+    for (const pe of playerEvals) {
+      if (totalWon[pe.player.id]) {
+        logMsg += `${pe.player.name}赢得${totalWon[pe.player.id]}筹码 `;
+      }
+    }
+    console.log(logMsg);
+  }
     console.log(`showdown: ${winners[0].name} 以 ${winnerHandType} 获胜，赢得 ${gs.pot} 筹码`);
   } else {
     const names = winners.map(w => w.name).join('、');
