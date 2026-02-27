@@ -659,22 +659,34 @@ function showdown(room) {
   const mainWinner = playerEvals[0].player;
   const winnerHandType = playerEvals[0].eval.name;
   const totalWinAmount = totalWon[mainWinner.id] || 0;
-  
-  // 检查是否有多个玩家赢了筹码
-  const uniqueWinners = Object.keys(totalWon);
-  if (uniqueWinners.length === 1) {
-    gs.winner = { name: mainWinner.name, chips: mainWinner.chips, pot: totalWinAmount, handType: winnerHandType };
-    console.log(`showdown: ${mainWinner.name} 以 ${winnerHandType} 获胜，赢得 ${totalWinAmount} 筹码`);
+
+  // 找出赢得筹码的玩家及其金额
+  const winnersWithAmount = Object.entries(totalWon)
+    .filter(([id, amount]) => amount > 0)
+    .sort((a, b) => b[1] - a[1]);
+
+  if (winnersWithAmount.length === 0) {
+    // 没有人赢筹码（异常情况）
+    gs.winner = { name: mainWinner.name, chips: mainWinner.chips, pot: 0, handType: winnerHandType };
+    console.log(`showdown: ${mainWinner.name} 以 ${winnerHandType} 获胜，但底池为0`);
+  } else if (winnersWithAmount.length === 1 || winnersWithAmount[0][1] > winnersWithAmount[1][1]) {
+    // 只有一个赢家，或者第一个赢家赢得最多
+    const winnerId = winnersWithAmount[0][0];
+    const winner = playerEvals.find(pe => pe.player.id === winnerId).player;
+    const winAmount = winnersWithAmount[0][1];
+    gs.winner = { name: winner.name, chips: winner.chips, pot: winAmount, handType: winnerHandType };
+    console.log(`showdown: ${winner.name} 以 ${winnerHandType} 获胜，赢得 ${winAmount} 筹码`);
   } else {
-    // 多个赢家（边注池分配给不同玩家）
-    gs.winner = { name: '多人', chips: 0, pot: gs.pot, handType: '边注池分配' };
-    let logMsg = 'showdown: 边注池分配 - ';
-    for (const pe of playerEvals) {
-      if (totalWon[pe.player.id]) {
-        logMsg += `${pe.player.name}赢得${totalWon[pe.player.id]}筹码 `;
-      }
-    }
-    console.log(logMsg);
+    // 多个玩家平局，赢得相同金额
+    const maxWin = winnersWithAmount[0][1];
+    const tiedWinners = winnersWithAmount.filter(([id, amount]) => amount === maxWin);
+    const winnerNames = tiedWinners.map(([id]) => {
+      const pe = playerEvals.find(p => p.player.id === id);
+      return pe ? pe.player.name : '';
+    }).filter(n => n).join('、');
+
+    gs.winner = { name: winnerNames, chips: 0, pot: maxWin, handType: winnerHandType, isTie: true };
+    console.log(`showdown: ${winnerNames} 平分底池，各赢 ${maxWin} 筹码`);
   }
   
   // 更新房间中玩家的筹码
