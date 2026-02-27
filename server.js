@@ -533,11 +533,17 @@ function nextPhase(room) {
 
 // 计算边注池（Side Pot）
 function calculateSidePots(players) {
-  const activePlayers = players.filter(p => p && !p.folded && (p.totalBet || 0) > 0);
-  if (activePlayers.length === 0) return [{ amount: 0, eligiblePlayers: players.filter(p => p && !p.folded).map(p => p.id) }];
+  // 所有有下注的玩家（包括弃牌的）
+  const allBettingPlayers = players.filter(p => p && (p.totalBet || 0) > 0);
+  // 未弃牌的玩家
+  const activePlayers = players.filter(p => p && !p.folded);
+
+  if (allBettingPlayers.length === 0) {
+    return [{ amount: 0, eligiblePlayers: activePlayers.map(p => p.id) }];
+  }
 
   // 按累计下注金额排序（从小到大）
-  const sortedByBet = [...activePlayers].sort((a, b) => (a.totalBet || 0) - (b.totalBet || 0));
+  const sortedByBet = [...allBettingPlayers].sort((a, b) => (a.totalBet || 0) - (b.totalBet || 0));
   const pots = [];
   let previousBet = 0;
 
@@ -547,10 +553,17 @@ function calculateSidePots(players) {
 
     if (currentBet > previousBet) {
       const layerAmount = currentBet - previousBet;
-      const eligiblePlayers = sortedByBet.filter(p => (p.totalBet || 0) >= currentBet).map(p => p.id);
-      const potAmount = layerAmount * eligiblePlayers.length;
 
-      if (potAmount > 0) {
+      // 该层级的下注金额 * 所有下注达到该金额的玩家数量
+      const playersAtThisLevel = allBettingPlayers.filter(p => (p.totalBet || 0) >= currentBet).length;
+      const potAmount = layerAmount * playersAtThisLevel;
+
+      // 但只有未弃牌且下注达到该金额的玩家才能参与分配
+      const eligiblePlayers = activePlayers
+        .filter(p => (p.totalBet || 0) >= currentBet)
+        .map(p => p.id);
+
+      if (potAmount > 0 && eligiblePlayers.length > 0) {
         pots.push({
           amount: potAmount,
           eligiblePlayers: eligiblePlayers
