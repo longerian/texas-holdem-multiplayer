@@ -210,6 +210,7 @@ function startGame(room) {
       chips: seat.chips,
       hand: [],
       bet: 0,
+      totalBet: 0,  // 累计总下注
       folded: false,
       isAllIn: false,
       isAI: seat.isAI || false,
@@ -266,13 +267,15 @@ function startGame(room) {
   const actualSmallBlind = Math.min(gs.smallBlind, sbPlayer.chips);
   sbPlayer.chips -= actualSmallBlind;
   sbPlayer.bet = actualSmallBlind;
+  sbPlayer.totalBet = actualSmallBlind;  // 累计总下注
   if (sbPlayer.chips === 0) sbPlayer.isAllIn = true;
-  
+
   // 大盲
   const bbPlayer = gs.players[bbIndex];
   const actualBigBlind = Math.min(gs.bigBlind, bbPlayer.chips);
   bbPlayer.chips -= actualBigBlind;
   bbPlayer.bet = actualBigBlind;
+  bbPlayer.totalBet = actualBigBlind;  // 累计总下注
   if (bbPlayer.chips === 0) bbPlayer.isAllIn = true;
   
   gs.pot = actualSmallBlind + actualBigBlind;
@@ -360,11 +363,13 @@ function executeAction(room, player, action, amount = 0) {
       if (toCall >= player.chips) {
         gs.pot += player.chips;
         player.bet += player.chips;
+        player.totalBet = (player.totalBet || 0) + player.chips;
         player.chips = 0;
         player.isAllIn = true;
       } else {
         player.chips -= toCall;
         player.bet = gs.currentBet;
+        player.totalBet = (player.totalBet || 0) + toCall;
         gs.pot += toCall;
       }
       break;
@@ -378,12 +383,14 @@ function executeAction(room, player, action, amount = 0) {
       if (toCallNew >= player.chips) {
         gs.pot += player.chips;
         player.bet += player.chips;
+        player.totalBet = (player.totalBet || 0) + player.chips;
         player.chips = 0;
         player.isAllIn = true;
         gs.currentBet = Math.max(gs.currentBet, player.bet);
       } else {
         player.chips -= toCallNew;
         player.bet = raiseAmount;
+        player.totalBet = (player.totalBet || 0) + toCallNew;
         gs.currentBet = raiseAmount;
         gs.pot += toCallNew;
         gs.actedThisRound = [playerIndex];
@@ -526,23 +533,23 @@ function nextPhase(room) {
 
 // 计算边注池（Side Pot）
 function calculateSidePots(players) {
-  const activePlayers = players.filter(p => p && !p.folded && p.bet > 0);
-  if (activePlayers.length === 0) return [{ amount: 0, eligiblePlayers: players.map(p => p.id) }];
-  
-  // 按下注金额排序（从小到大）
-  const sortedByBet = [...activePlayers].sort((a, b) => a.bet - b.bet);
+  const activePlayers = players.filter(p => p && !p.folded && (p.totalBet || 0) > 0);
+  if (activePlayers.length === 0) return [{ amount: 0, eligiblePlayers: players.filter(p => p && !p.folded).map(p => p.id) }];
+
+  // 按累计下注金额排序（从小到大）
+  const sortedByBet = [...activePlayers].sort((a, b) => (a.totalBet || 0) - (b.totalBet || 0));
   const pots = [];
   let previousBet = 0;
-  
+
   for (let i = 0; i < sortedByBet.length; i++) {
     const currentPlayer = sortedByBet[i];
-    const currentBet = currentPlayer.bet;
-    
+    const currentBet = currentPlayer.totalBet || 0;
+
     if (currentBet > previousBet) {
       const layerAmount = currentBet - previousBet;
-      const eligiblePlayers = sortedByBet.filter(p => p.bet >= currentBet).map(p => p.id);
+      const eligiblePlayers = sortedByBet.filter(p => (p.totalBet || 0) >= currentBet).map(p => p.id);
       const potAmount = layerAmount * eligiblePlayers.length;
-      
+
       if (potAmount > 0) {
         pots.push({
           amount: potAmount,
@@ -552,7 +559,7 @@ function calculateSidePots(players) {
       previousBet = currentBet;
     }
   }
-  
+
   return pots;
 }
 
