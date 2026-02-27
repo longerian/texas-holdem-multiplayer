@@ -138,12 +138,32 @@ function evaluateHand(cards) {
         const flushSuit = Object.entries(suitCounts).find(([s, c]) => c >= 5)[0];
         const flushCards = cards.filter(c => c.suit === flushSuit)
             .map(c => RANKS.indexOf(c.rank))
-            .sort((a, b) => b - a)
-            .slice(0, 5);
-        if (isStraight) {
-            return { rank: 8, name: '同花顺', kickers: [straightHigh, -1, -1, -1, -1] };
+            .sort((a, b) => b - a);
+        
+        // 检查同花牌中是否有顺子（同花顺）
+        const flushRanks = [...new Set(flushCards)].sort((a, b) => a - b);
+        let hasStraightFlush = false;
+        let straightFlushHigh = 0;
+        
+        // A-2-3-4-5 特殊顺子
+        if (flushRanks.includes(12) && flushRanks.includes(0) && flushRanks.includes(1) && flushRanks.includes(2) && flushRanks.includes(3)) {
+            hasStraightFlush = true;
+            straightFlushHigh = 3;
         }
-        return { rank: 5, name: '同花', kickers: [...flushCards, -1, -1, -1, -1].slice(0, 5) };
+        
+        for (let i = 0; i <= flushRanks.length - 5; i++) {
+            if (flushRanks[i + 4] - flushRanks[i] === 4) {
+                hasStraightFlush = true;
+                straightFlushHigh = flushRanks[i + 4];
+            }
+        }
+        
+        if (hasStraightFlush) {
+            return { rank: 8, name: '同花顺', kickers: [straightFlushHigh, -1, -1, -1, -1] };
+        }
+        
+        const top5Flush = flushCards.slice(0, 5);
+        return { rank: 5, name: '同花', kickers: [...top5Flush, -1, -1, -1, -1].slice(0, 5) };
     }
     
     if (isStraight) {
