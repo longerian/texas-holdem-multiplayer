@@ -656,24 +656,24 @@ function showdown(room) {
   });
   
   // 保存获胜者信息（显示赢得最多的玩家）
-  const mainWinner = playerEvals[0].player;
-  const winnerHandType = playerEvals[0].eval.name;
-  const totalWinAmount = totalWon[mainWinner.id] || 0;
-
   // 找出赢得筹码的玩家及其金额
   const winnersWithAmount = Object.entries(totalWon)
     .filter(([id, amount]) => amount > 0)
     .sort((a, b) => b[1] - a[1]);
 
   if (winnersWithAmount.length === 0) {
-    // 没有人赢筹码（异常情况）
+    // 没有人赢筹码（异常情况，使用牌力最强的玩家）
+    const mainWinner = playerEvals[0].player;
+    const winnerHandType = playerEvals[0].eval.name;
     gs.winner = { name: mainWinner.name, chips: mainWinner.chips, pot: 0, handType: winnerHandType };
     console.log(`showdown: ${mainWinner.name} 以 ${winnerHandType} 获胜，但底池为0`);
-  } else if (winnersWithAmount.length === 1 || winnersWithAmount[0][1] > winnersWithAmount[1][1]) {
+  } else if (winnersWithAmount.length === 1 || (winnersWithAmount.length > 1 && winnersWithAmount[0][1] > winnersWithAmount[1][1])) {
     // 只有一个赢家，或者第一个赢家赢得最多
     const winnerId = winnersWithAmount[0][0];
-    const winner = playerEvals.find(pe => pe.player.id === winnerId).player;
+    const winnerPE = playerEvals.find(pe => pe.player.id === winnerId);
+    const winner = winnerPE.player;
     const winAmount = winnersWithAmount[0][1];
+    const winnerHandType = winnerPE.eval.name;
     gs.winner = { name: winner.name, chips: winner.chips, pot: winAmount, handType: winnerHandType };
     console.log(`showdown: ${winner.name} 以 ${winnerHandType} 获胜，赢得 ${winAmount} 筹码`);
   } else {
@@ -684,6 +684,7 @@ function showdown(room) {
       const pe = playerEvals.find(p => p.player.id === id);
       return pe ? pe.player.name : '';
     }).filter(n => n).join('、');
+    const winnerHandType = playerEvals[0].eval.name;
 
     gs.winner = { name: winnerNames, chips: 0, pot: maxWin, handType: winnerHandType, isTie: true };
     console.log(`showdown: ${winnerNames} 平分底池，各赢 ${maxWin} 筹码`);
