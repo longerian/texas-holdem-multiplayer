@@ -656,12 +656,6 @@ function showdown(room) {
     }
     console.log(logMsg);
   }
-    console.log(`showdown: ${winners[0].name} 以 ${winnerHandType} 获胜，赢得 ${gs.pot} 筹码`);
-  } else {
-    const names = winners.map(w => w.name).join('、');
-    gs.winner = { name: names, chips: winners[0].chips, pot: winAmount, handType: winnerHandType, isTie: true };
-    console.log(`showdown: ${names} 平分底池，各赢 ${winAmount} 筹码`);
-  }
   
   // 更新房间中玩家的筹码
   gs.players.forEach((p, i) => {
